@@ -8,6 +8,8 @@ package platform
 
 import (
 	"os"
+	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-test/deep"
@@ -70,11 +72,11 @@ func TestPushPopFailedConfig(t *testing.T) {
 }
 
 func TestPushTestConfig(t *testing.T) {
-	if err := PushConfig("testing"); err != nil {
+	if err := PushConfig("staging"); err != nil {
 		t.Fatalf("failed to push testing config: %v", err)
 	}
 	defer PopConfig()
-	if cfg := GetConfig().DbKeyPrefix; cfg != "t:" {
+	if cfg := GetConfig().DbKeyPrefix; cfg != "s:" {
 		t.Errorf("Prefix after test push is wrong: %q", cfg)
 	}
 }
@@ -198,8 +200,9 @@ func TestFindEnvFile(t *testing.T) {
 	if d, err := FindEnvFile(".env.vault", false); err != nil {
 		t.Errorf("Didn't find .env.vault in parent")
 	} else {
-		if d != "../../" {
-			t.Errorf("Found .env.vault in wrong parent")
+		if _, err := os.Stat(path.Join(d, "go.mod")); err != nil {
+			path, _ := filepath.Abs(d)
+			t.Errorf("Found .env.vault in a parent that doesn't have a go.mod file: %s", path)
 		}
 	}
 }

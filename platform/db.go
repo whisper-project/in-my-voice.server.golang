@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	projectPrefix = "whisper:"
+	projectPrefix = "in-my-voice:"
 	clientUrl     string
 	client        *redis.Client
 	keyPrefix     string
