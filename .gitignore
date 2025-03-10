@@ -1,0 +1,25 @@
+# local directory, by convention
+local/
+
+# built module main
+/server.golang*
+
+# dotenv
+.env*
+!.env.project
+!.env.vault
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# golang Test binary, built with `go test -c`
+*.test
+
+# Output of the golang test coverage tool and many others
+*.out
+
+.flaskenv*
