@@ -32,3 +32,13 @@ func ShutdownHandler(c *gin.Context) {
 	storage.ObserveClientShutdown(clientId)
 	c.Status(http.StatusNoContent)
 }
+
+func AnomalyHandler(c *gin.Context) {
+	clientId := c.GetHeader("X-Client-Id")
+	profileId := c.GetHeader("X-Profile-Id")
+	message := c.Param("message")
+	middleware.CtxLog(c).Info("Anomaly reported",
+		zap.String("clientId", clientId), zap.String("profileId", profileId),
+		zap.String("message", message))
+	c.Status(http.StatusNoContent)
+}

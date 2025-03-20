@@ -51,7 +51,8 @@ func Startup(router *gin.Engine, hostPort string) {
 	// Shutdown the http server instance cleanly.
 	// If the server is still running, we give it until we have Shutdown,
 	// at which point we force quit it.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(sCtx())
+	storage.ServerContext = ctx
 	defer cancel()
 	if running {
 		go func() {
@@ -92,6 +93,7 @@ func CreateEngine() (*gin.Engine, error) {
 		return nil, err
 	}
 	storage.ServerLogger = logger
+	storage.ServerContext = context.Background()
 	return engine, nil
 }
 

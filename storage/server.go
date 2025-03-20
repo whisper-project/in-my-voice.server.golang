@@ -16,7 +16,7 @@ import (
 var (
 	ServerId      = uuid.NewString()
 	ServerLogger  *zap.Logger
-	ServerContext context.Context = context.Background()
+	ServerContext context.Context = context.Background() // for when the server isn't running
 )
 
 func sLog() *zap.Logger {

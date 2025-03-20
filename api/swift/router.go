@@ -14,5 +14,6 @@ import (
 func AddRoutes(r *gin.RouterGroup) {
 	r.GET("/status", handlers.StatusHandler)
 	r.POST("/launch", handlers.LaunchHandler)
+	r.POST("/anomaly", handlers.AnomalyHandler)
 	r.GET("/shutdown", handlers.ShutdownHandler)
 }
