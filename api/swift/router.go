@@ -13,7 +13,16 @@ import (
 
 func AddRoutes(r *gin.RouterGroup) {
 	r.GET("/status", handlers.StatusHandler)
-	r.POST("/launch", handlers.LaunchHandler)
 	r.POST("/anomaly", handlers.AnomalyHandler)
-	r.GET("/shutdown", handlers.ShutdownHandler)
+	r.POST("/launch", handlers.LaunchHandler)
+	r.POST("/foreground", handlers.ForegroundHandler)
+	r.POST("/background", handlers.BackgroundHandler)
+	r.POST("/shutdown", handlers.ShutdownHandler)
+	r.POST("/change-data", handlers.ChangeDataHandler)
+	r.POST("/repeat-line", handlers.RepeatLineHandler)
+	r.POST("/speech-failure/eleven", handlers.ElevenSpeechFailureHandler)
+	r.GET("/speech-settings/eleven", handlers.ElevenSpeechSettingsGetHandler)
+	r.PUT("/speech-settings/eleven", handlers.ElevenSpeechSettingsPutHandler)
+	r.GET("/favorites", handlers.FavoritesGetHandler)
+	r.PUT("/favorites", handlers.FavoritesPutHandler)
 }

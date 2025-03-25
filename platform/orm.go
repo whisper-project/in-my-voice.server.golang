@@ -99,7 +99,7 @@ func StructPointerInterfaceTester[T StructPointer](t *testing.T, n T, v T, pv an
 		t.Errorf("Failed to set platform id: %v", err)
 	}
 	if v.StorageId() != newId {
-		t.Errorf("StorageId is wrong: %s != %s", v.StorageId(), "after")
+		t.Errorf("StorageId is wrong: %s != %s", v.StorageId(), newId)
 	}
 	dup := v.Copy()
 	if diff := deep.Equal(dup, v); diff != nil {
