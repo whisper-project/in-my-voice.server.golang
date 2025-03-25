@@ -163,7 +163,7 @@ func ProfileClientSpeechNeedsNotification(profileId, clientId string) (bool, err
 		sLog().Error("lookup set member failed", zap.Error(err))
 		return false, err
 	}
-	return isMember, nil
+	return !isMember, nil
 }
 
 func ProfileClientSpeechWasNotified(profileId, clientId string) error {
@@ -205,7 +205,7 @@ func ProfileClientFavoritesNeedsNotification(profileId, clientId string) (bool, 
 		sLog().Error("lookup set member failed", zap.Error(err))
 		return false, err
 	}
-	return isMember, nil
+	return !isMember, nil
 }
 
 func ProfileClientFavoritesWasNotified(profileId, clientId string) error {

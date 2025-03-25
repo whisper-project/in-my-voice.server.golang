@@ -83,13 +83,13 @@ func ValidateRequest(c *gin.Context) (clientId, profileId string, ok bool) {
 }
 
 func AnnotateResponse(c *gin.Context, clientId, profileId string) {
-	needsNotification, err := storage.ProfileClientSpeechNeedsNotification(profileId, clientId)
-	if needsNotification || err != nil {
+	needsNotification, _ := storage.ProfileClientSpeechNeedsNotification(profileId, clientId)
+	if needsNotification {
 		c.Header("X-Speech-Settings-Update", "YES")
 		_ = storage.ProfileClientSpeechWasNotified(profileId, clientId)
 	}
-	needsNotification, err = storage.ProfileClientFavoritesNeedsNotification(profileId, clientId)
-	if needsNotification || err != nil {
+	needsNotification, _ = storage.ProfileClientFavoritesNeedsNotification(profileId, clientId)
+	if needsNotification {
 		c.Header("X-Favorites-Update", "YES")
 		_ = storage.ProfileClientFavoritesWasNotified(profileId, clientId)
 	}
