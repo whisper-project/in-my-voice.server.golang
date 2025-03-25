@@ -17,20 +17,24 @@ import (
 )
 
 func FavoritesGetHandler(c *gin.Context) {
-	_, profileId, ok := ValidateRequest(c)
+	clientId, profileId, ok := ValidateRequest(c)
 	if !ok {
 		return
 	}
-	s, err := storage.GetFavoritesSettings(profileId)
+	f, err := storage.GetFavoritesSettings(profileId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
-	if s == nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "error": "profile has no speech settings"})
+	if f != nil {
+		middleware.CtxLog(c).Info("successful favorites retrieval",
+			zap.String("clientId", clientId), zap.String("profileId", profileId))
+		c.JSON(http.StatusOK, json.RawMessage(f.Settings))
 		return
 	}
-	c.JSON(http.StatusOK, json.RawMessage(s.Settings))
+	middleware.CtxLog(c).Info("no favorites to retrieve",
+		zap.String("clientId", clientId), zap.String("profileId", profileId))
+	c.Status(http.StatusNoContent)
 }
 
 func FavoritesPutHandler(c *gin.Context) {
