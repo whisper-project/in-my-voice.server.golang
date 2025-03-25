@@ -18,3 +18,7 @@ func ChangeDataHandler(c *gin.Context) {
 func RepeatLineHandler(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
+
+func FavoriteLineHandler(c *gin.Context) {
+	c.Status(http.StatusNoContent)
+}
