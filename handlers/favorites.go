@@ -26,6 +26,8 @@ func FavoritesGetHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
+	// make sure any update annotation has been removed
+	c.Header("X-Favorites-Update", "")
 	if f != nil {
 		middleware.CtxLog(c).Info("successful favorites retrieval",
 			zap.String("clientId", clientId), zap.String("profileId", profileId))
@@ -42,6 +44,8 @@ func FavoritesPutHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// make sure any update annotation has been removed
+	c.Header("X-Favorites-Update", "")
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		middleware.CtxLog(c).Error("failed to read settings", zap.Error(err))

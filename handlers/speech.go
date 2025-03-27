@@ -26,6 +26,8 @@ func ElevenSpeechSettingsGetHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
+	// make sure any update annotation has been removed
+	c.Header("X-Speech-Settings-Update", "")
 	if s != nil {
 		middleware.CtxLog(c).Info("successful speech settings retrieval",
 			zap.String("clientId", clientId), zap.String("profileId", profileId))
@@ -42,6 +44,8 @@ func ElevenSpeechSettingsPutHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// make sure any update annotation has been removed
+	c.Header("X-Speech-Settings-Update", "")
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		middleware.CtxLog(c).Error("failed to read settings", zap.Error(err))

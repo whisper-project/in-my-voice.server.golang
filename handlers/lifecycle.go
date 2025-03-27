@@ -34,6 +34,10 @@ func LaunchHandler(c *gin.Context) {
 		return
 	}
 	storage.ObserveClientLaunch(clientType, clientId, profileId)
+	// make sure any update annotation has been removed,
+	// because clients update everything at launch
+	c.Header("X-Speech-Settings-Update", "")
+	c.Header("X-Favorites-Update", "")
 	middleware.CtxLog(c).Info("Launch received",
 		zap.String("clientType", clientType), zap.String("clientId", clientId),
 		zap.String("profileId", profileId))
@@ -47,6 +51,8 @@ func ForegroundHandler(c *gin.Context) {
 		return
 	}
 	storage.ObserveClientActive(clientId, profileId)
+	middleware.CtxLog(c).Info("Foreground received",
+		zap.String("clientId", clientId), zap.String("profileId", profileId))
 	c.Status(http.StatusNoContent)
 }
 
@@ -56,6 +62,8 @@ func BackgroundHandler(c *gin.Context) {
 		return
 	}
 	storage.ObserveClientActive(clientId, profileId)
+	middleware.CtxLog(c).Info("Background received",
+		zap.String("clientId", clientId), zap.String("profileId", profileId))
 	c.Status(http.StatusNoContent)
 }
 
@@ -65,6 +73,8 @@ func ShutdownHandler(c *gin.Context) {
 		return
 	}
 	storage.ObserveClientShutdown(clientId, profileId)
+	middleware.CtxLog(c).Info("Shutdown received",
+		zap.String("clientId", clientId), zap.String("profileId", profileId))
 	c.Status(http.StatusNoContent)
 }
 
