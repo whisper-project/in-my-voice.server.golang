@@ -307,7 +307,7 @@ func TestStorableSortedSetInterfaceDefinition(t *testing.T) {
 	StorableInterfaceTester(t, ormTestSortedSet, "zset:", "ormTestSortedSet")
 }
 
-func TestSortedFetchAddFetchRemoveMembers(t *testing.T) {
+func TestSortedFetchAddFetchRemoveMember(t *testing.T) {
 	ctx := context.Background()
 	sorted := []string{"a", "b", "c"}
 	if members, err := FetchRangeInterval(ctx, ormTestSortedSet, 0, -1); err != nil || len(members) != 0 {
@@ -332,7 +332,7 @@ func TestSortedFetchAddFetchRemoveMembers(t *testing.T) {
 	} else if diff := deep.Equal(sorted[1:3], found); diff != nil {
 		t.Error(diff)
 	}
-	if err := RemoveMember(ctx, ormTestSortedSet, "a"); err != nil {
+	if err := RemoveScoredMember(ctx, ormTestSortedSet, "a"); err != nil {
 		t.Error(err)
 	}
 	if found, err := FetchRangeInterval(ctx, ormTestSortedSet, 0, -1); err != nil {

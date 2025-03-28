@@ -59,14 +59,18 @@ func init() {
 func createParticipant(apiKey, voiceId string) {
 	upn := templateName()
 	id := voiceId
+	var name string
 	if id == "" {
-		id, name := pickVoice(apiKey)
-		log.Printf("Picked voice %s (%s) for user %s", name, id, upn)
+		id, name = pickVoice(apiKey)
 	}
 	if err := storage.AddStudyParticipant(upn, apiKey, id); err != nil {
 		log.Fatalf("Can't add participant %s: %v", upn, err)
 	}
-	log.Printf("Added participant %s", upn)
+	if name != "" {
+		log.Printf("Added participant %q with voice %s", upn, name)
+	} else {
+		log.Printf("Added participant %q", upn)
+	}
 }
 
 const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -97,6 +101,7 @@ func pickVoice(apiKey string) (string, string) {
 			log.Fatalf("Failed to fetch voices: %v", err)
 		}
 	}
-	voice := voices[seededRand.Intn(len(voices))]
+	next := seededRand.Intn(len(voices))
+	voice := voices[next]
 	return voice.VoiceId, voice.Name
 }

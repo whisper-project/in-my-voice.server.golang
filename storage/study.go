@@ -142,7 +142,7 @@ func AssignStudyParticipant(profileId, upn string) (string, error) {
 			zap.Error(err))
 		return "", err
 	}
-	if err := platform.RemoveMember(sCtx(), availableStudyParticipants, upn); err != nil {
+	if err := platform.RemoveMembers(sCtx(), availableStudyParticipants, upn); err != nil {
 		sLog().Error("remove member failure on participant assignment",
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
@@ -176,11 +176,39 @@ func UnassignStudyParticipant(profileId string, upn string) error {
 			zap.Error(err))
 		return err
 	}
-	if err := platform.RemoveMember(sCtx(), usedStudyParticipants, upn); err != nil {
+	if err := platform.RemoveMembers(sCtx(), usedStudyParticipants, upn); err != nil {
 		sLog().Error("remove member failure on participant unassignment",
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
 		return err
 	}
 	return nil
+}
+
+func AvailableParticipantIds() ([]string, error) {
+	return allParticipantIds("available-study-participants")
+}
+
+func UsedParticipantIds() ([]string, error) {
+	return allParticipantIds("used-study-participants")
+}
+
+func UnassignedParticipantIds() ([]string, error) {
+	return allParticipantIds("unassigned-study-participants")
+}
+
+func AssignedProfilesParticipantIds() (map[string]string, error) {
+	result, err := platform.MapGetAll(sCtx(), profileParticipantMap)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func allParticipantIds(kind string) ([]string, error) {
+	result, err := platform.FetchMembers(sCtx(), platform.StorableSet(kind))
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

@@ -385,7 +385,7 @@ func AddScoredMember[T SortedSet](ctx context.Context, obj T, score float64, mem
 	return nil
 }
 
-func RemoveMember[T SortedSet](ctx context.Context, obj T, member string) error {
+func RemoveScoredMember[T SortedSet](ctx context.Context, obj T, member string) error {
 	db, prefix := GetDb()
 	key := prefix + obj.StoragePrefix() + obj.StorageId()
 	res := db.ZRem(ctx, key, member)

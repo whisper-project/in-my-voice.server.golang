@@ -19,13 +19,13 @@ func JoinStudyHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var body map[string]string
-	if err := c.ShouldBind(body); err != nil {
+	var body map[string]any
+	if err := c.ShouldBind(&body); err != nil {
 		c.JSON(400, gin.H{"status": "error", "error": "invalid request body"})
 		return
 	}
-	studyId := body["studyId"]
-	if studyId == "" {
+	studyId, ok := body["studyId"].(string)
+	if !ok || studyId == "" {
 		c.JSON(400, gin.H{"status": "error", "error": "invalid request body"})
 		return
 	}
@@ -96,4 +96,5 @@ func LeaveStudyHandler(c *gin.Context) {
 		zap.String("clientId", clientId), zap.String("profileId", profileId), zap.String("studyId", upn))
 	c.Header("X-Study-Membership-Update", "false")
 	c.Header("X-Speech-Settings-Update", "true")
+	c.Status(204)
 }
