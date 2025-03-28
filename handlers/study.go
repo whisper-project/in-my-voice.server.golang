@@ -25,6 +25,10 @@ func JoinStudyHandler(c *gin.Context) {
 		return
 	}
 	studyId := body["studyId"]
+	if studyId == "" {
+		c.JSON(400, gin.H{"status": "error", "error": "invalid request body"})
+		return
+	}
 	if upn, err := storage.GetProfileStudyMembership(profileId); err != nil {
 		c.JSON(500, gin.H{"status": "error", "error": "database failure"})
 		return
@@ -33,10 +37,6 @@ func JoinStudyHandler(c *gin.Context) {
 			zap.String("clientId", clientId), zap.String("profileId", profileId),
 			zap.String("studyId", studyId))
 		c.JSON(403, gin.H{"status": "error", "error": "study ID already assigned"})
-	}
-	if studyId == "" {
-		c.JSON(400, gin.H{"status": "error", "error": "invalid request body"})
-		return
 	}
 	settings, err := storage.AssignStudyParticipant(profileId, studyId)
 	if errors.Is(err, storage.ParticipantNotAvailableError) {
@@ -50,19 +50,50 @@ func JoinStudyHandler(c *gin.Context) {
 		return
 	}
 	// user is now in the study, save their settings and tell them
-	_, err = storage.UpdateFavoritesSettings(profileId, settings)
+	_, err = storage.UpdateSpeechSettings(profileId, settings)
 	if err != nil {
 		c.JSON(500, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
+	defer func() {
+		_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+	}()
 	middleware.CtxLog(c).Info("study ID assigned",
 		zap.String("clientId", clientId), zap.String("profileId", profileId),
 		zap.String("studyId", studyId))
 	c.Header("X-Study-Membership-Update", "true")
-	c.Header("X-Speech-Settings-Update", settings)
+	c.Header("X-Speech-Settings-Update", "true")
 	c.Status(204)
 }
 
 func LeaveStudyHandler(c *gin.Context) {
-
+	clientId, profileId, ok := ValidateRequest(c)
+	if !ok {
+		return
+	}
+	upn, err := storage.GetProfileStudyMembership(profileId)
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "error": "database failure"})
+		return
+	} else if upn == "" {
+		middleware.CtxLog(c).Info("profile not enrolled in study",
+			zap.String("clientId", clientId), zap.String("profileId", profileId),
+			zap.String("studyId", upn))
+		c.JSON(403, gin.H{"status": "error", "error": "no study ID assigned"})
+	}
+	if err = storage.UnassignStudyParticipant(profileId, upn); err != nil {
+		c.JSON(500, gin.H{"status": "error", "error": "database failure"})
+		return
+	}
+	// user is now out of the study, delete their settings and tell them
+	if err := storage.DeleteSpeechSettings(profileId); err != nil {
+		c.JSON(500, gin.H{"status": "error", "error": "database failure"})
+	}
+	defer func() {
+		_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+	}()
+	middleware.CtxLog(c).Info("study ID unassigned",
+		zap.String("clientId", clientId), zap.String("profileId", profileId), zap.String("studyId", upn))
+	c.Header("X-Study-Membership-Update", "false")
+	c.Header("X-Speech-Settings-Update", "true")
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/whisper-project/in-my-voice.server.golang/middleware"
+	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"go.uber.org/zap"
 	"io"
@@ -39,30 +40,67 @@ func ElevenSpeechSettingsGetHandler(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func ElevenSpeechSettingsPutHandler(c *gin.Context) {
+func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 	clientId, profileId, ok := ValidateRequest(c)
 	if !ok {
 		return
 	}
-	// make sure any update annotation has been removed
-	c.Header("X-Speech-Settings-Update", "")
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		middleware.CtxLog(c).Error("failed to read settings", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read request body"})
 		return
 	}
+	apiKey, voiceId, ok := services.ElevenParseSettings(string(body))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid settings"})
+		return
+	}
+	if ok, err := services.ElevenValidateApiKey(apiKey); err != nil {
+		middleware.CtxLog(c).Error("network failure validating API key", zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"status": "error", "error": "Network error reaching ElevenLabs"})
+		return
+	} else if !ok {
+		middleware.CtxLog(c).Info("invalid API key", zap.String("apiKey", apiKey),
+			zap.String("clientId", clientId), zap.String("profileId", profileId))
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "error": "invalid API key"})
+		return
+	}
+	if voiceId == "" {
+		voices, err := services.ElevenFetchVoices(apiKey)
+		if err != nil {
+			middleware.CtxLog(c).Error("network failure fetching voices", zap.Error(err))
+			c.JSON(http.StatusBadGateway, gin.H{"status": "error", "error": "Network error reaching ElevenLabs"})
+			return
+		}
+		middleware.CtxLog(c).Info("apiKey OK, returning voices", zap.Int64("voiceCount", int64(len(voices))),
+			zap.String("clientId", clientId), zap.String("profileId", profileId))
+		c.JSON(http.StatusOK, voices)
+		return
+	}
+	if ok, err := services.ElevenValidateVoiceId(apiKey, voiceId); err != nil {
+		middleware.CtxLog(c).Error("network failure validating voice ID", zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"status": "error", "error": "Network error reaching ElevenLabs"})
+		return
+	} else if !ok {
+		middleware.CtxLog(c).Info("invalid voice ID", zap.String("voiceId", voiceId),
+			zap.String("clientId", clientId), zap.String("profileId", profileId))
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "invalid voice ID"})
+	}
+	// validation complete: update the voice settings
 	changed, err := storage.UpdateSpeechSettings(profileId, string(body))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
 	if changed {
-		if err := storage.ProfileClientSpeechDidUpdate(profileId, clientId); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
-			return
-		}
+		c.Header("X-Speech-Settings-Update", "true")
+		defer func() {
+			_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+		}()
 	}
+	middleware.CtxLog(c).Info("speech settings updated",
+		zap.String("clientId", clientId), zap.String("profileId", profileId))
 	c.Status(http.StatusNoContent)
 }
 

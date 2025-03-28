@@ -58,10 +58,9 @@ func FavoritesPutHandler(c *gin.Context) {
 		return
 	}
 	if changed {
-		if err := storage.ProfileClientFavoritesDidUpdate(profileId, clientId); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
-			return
-		}
+		defer func() {
+			_ = storage.ProfileClientFavoritesDidUpdate(profileId, clientId)
+		}()
 	}
 	c.Status(http.StatusNoContent)
 }

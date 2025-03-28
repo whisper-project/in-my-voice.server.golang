@@ -75,6 +75,7 @@ func NewParticipant(upn, apiKey, voiceId string) (*StudyParticipant, error) {
 var (
 	availableStudyParticipants    = platform.StorableSet("available-study-participants")
 	usedStudyParticipants         = platform.StorableSet("used-study-participants")
+	unassignedStudyParticipants   = platform.StorableSet("unassigned-study-participants")
 	profileParticipantMap         = platform.StorableMap("profile-participant-map")
 	ParticipantAlreadyExistsError = errors.New("participant UPN already exists")
 	ParticipantNotValidError      = errors.New("apiKey or voiceId not valid")
@@ -85,14 +86,14 @@ func AddStudyParticipant(upn, apiKey, voiceId string) error {
 	// make sure this is a new UPN
 	if ok, err := platform.IsMember(sCtx(), availableStudyParticipants, upn); err != nil {
 		sLog().Error("check member failure on UPN lookup",
-			zap.String("UPN", upn), zap.Error(err))
+			zap.String("studyId", upn), zap.Error(err))
 		return err
 	} else if ok {
 		return ParticipantAlreadyExistsError
 	}
 	if ok, err := platform.IsMember(sCtx(), usedStudyParticipants, upn); err != nil {
 		sLog().Error("check member failure on UPN lookup",
-			zap.String("UPN", upn), zap.Error(err))
+			zap.String("studyId", upn), zap.Error(err))
 		return err
 	} else if ok {
 		return ParticipantAlreadyExistsError
@@ -106,12 +107,12 @@ func AddStudyParticipant(upn, apiKey, voiceId string) error {
 	}
 	if err := platform.SaveFields(sCtx(), n); err != nil {
 		sLog().Error("save fields failure adding participant",
-			zap.String("UPN", upn), zap.Error(err))
+			zap.String("studyId", upn), zap.Error(err))
 		return err
 	}
 	if err := platform.AddMembers(sCtx(), availableStudyParticipants, upn); err != nil {
 		sLog().Error("add member failure adding participant",
-			zap.String("UPN", upn), zap.Error(err))
+			zap.String("studyId", upn), zap.Error(err))
 		return err
 	}
 	return nil
@@ -135,18 +136,51 @@ func AssignStudyParticipant(profileId, upn string) (string, error) {
 	} else if !ok {
 		return "", ParticipantNotAvailableError
 	}
+	if err := platform.AddMembers(sCtx(), usedStudyParticipants, upn); err != nil {
+		sLog().Error("add member failure on participant assignment",
+			zap.String("profileId", profileId), zap.String("studyId", upn),
+			zap.Error(err))
+		return "", err
+	}
+	if err := platform.RemoveMember(sCtx(), availableStudyParticipants, upn); err != nil {
+		sLog().Error("remove member failure on participant assignment",
+			zap.String("profileId", profileId), zap.String("studyId", upn),
+			zap.Error(err))
+	}
 	p := &StudyParticipant{Upn: upn}
 	if err := platform.LoadFields(sCtx(), p); err != nil {
 		sLog().Error("load fields failure on participant assignment",
-			zap.String("profileId", profileId), zap.String("UPN", upn),
+			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
 		return "", err
 	}
 	if err := platform.MapSet(sCtx(), profileParticipantMap, profileId, upn); err != nil {
 		sLog().Error("map set failure on participant assignment",
-			zap.String("profileId", profileId), zap.String("UPN", upn),
+			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
 	}
 	s := services.ElevenLabsGenerateSettings(p.ApiKey, p.VoiceId)
 	return s, nil
+}
+
+func UnassignStudyParticipant(profileId string, upn string) error {
+	if err := platform.MapRemove(sCtx(), profileParticipantMap, profileId); err != nil {
+		sLog().Error("map remove failure on participant unassignment",
+			zap.String("profileId", profileId), zap.String("studyId", upn),
+			zap.Error(err))
+		return err
+	}
+	if err := platform.AddMembers(sCtx(), unassignedStudyParticipants, upn); err != nil {
+		sLog().Error("add member failure on participant unassignment",
+			zap.String("profileId", profileId), zap.String("studyId", upn),
+			zap.Error(err))
+		return err
+	}
+	if err := platform.RemoveMember(sCtx(), usedStudyParticipants, upn); err != nil {
+		sLog().Error("remove member failure on participant unassignment",
+			zap.String("profileId", profileId), zap.String("studyId", upn),
+			zap.Error(err))
+		return err
+	}
+	return nil
 }

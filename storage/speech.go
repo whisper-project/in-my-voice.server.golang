@@ -100,3 +100,13 @@ func UpdateSpeechSettings(profileId, settings string) (bool, error) {
 	}
 	return true, nil
 }
+
+func DeleteSpeechSettings(profileId string) error {
+	s := &SpeechSettings{ProfileId: profileId}
+	if err := platform.DeleteStorage(sCtx(), s); err != nil {
+		sLog().Error("delete failure on settings delete",
+			zap.String("profileId", profileId), zap.Error(err))
+		return err
+	}
+	return nil
+}
