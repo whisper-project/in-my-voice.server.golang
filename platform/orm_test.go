@@ -346,6 +346,7 @@ func TestSortedFetchAddFetchRemoveMembers(t *testing.T) {
 }
 
 var ormTestList StorableList = "ormTestList"
+var ormTestList2 StorableList = "ormTestList2"
 
 func TestStorableListInterfaceDefinition(t *testing.T) {
 	StorableInterfaceTester(t, ormTestList, "list:", "ormTestList")
@@ -415,6 +416,45 @@ func TestFetchOneBlocking(t *testing.T) {
 		t.Errorf("FetchRange of remaining list failed, expected success")
 	} else if diff := deep.Equal(remaining, []string{"c", "a", "b"}); diff != nil {
 		t.Errorf("FetchRange of remaining list is:\n%v\ndifferences are:\n%v", remaining, diff)
+	}
+}
+
+func TestMoveRange(t *testing.T) {
+	ctx := context.Background()
+	defer func() {
+		if err := DeleteStorage(ctx, ormTestList); err != nil {
+			t.Errorf("Failed to delete stored data for %q: %v", ormTestList, err)
+		}
+		if err := DeleteStorage(ctx, ormTestList2); err != nil {
+			t.Errorf("Failed to delete stored data for %q: %v", ormTestList2, err)
+		}
+	}()
+	if _, err := MoveOne(ctx, ormTestList, ormTestList2, false, true); err == nil {
+		t.Errorf("Move one on empty source should fail")
+	}
+	if err := PushRange(ctx, ormTestList, false, "a", "b", "c"); err != nil {
+		t.Fatalf("Failed to push right: %v", err)
+	}
+	if _, err := MoveOne(ctx, ormTestList, ormTestList2, false, true); err != nil {
+		t.Errorf("Move one failed: %v", err)
+	}
+	if remaining, err := FetchRange(ctx, ormTestList, 0, -1); err != nil {
+		t.Errorf("FetchRange of source list failed, expected success")
+	} else if diff := deep.Equal(remaining, []string{"a", "b"}); diff != nil {
+		t.Errorf("FetchRange of source list is:\n%v\ndifferences are:\n%v", remaining, diff)
+	}
+	if _, err := MoveOne(ctx, ormTestList, ormTestList2, false, true); err != nil {
+		t.Errorf("Move one failed: %v", err)
+	}
+	if remaining, err := FetchRange(ctx, ormTestList, 0, -1); err != nil {
+		t.Errorf("FetchRange of source list failed, expected success")
+	} else if diff := deep.Equal(remaining, []string{"a"}); diff != nil {
+		t.Errorf("FetchRange of source list is:\n%v\ndifferences are:\n%v", remaining, diff)
+	}
+	if remaining, err := FetchRange(ctx, ormTestList2, 0, -1); err != nil {
+		t.Errorf("FetchRange of destination list failed, expected success")
+	} else if diff := deep.Equal(remaining, []string{"b", "c"}); diff != nil {
+		t.Errorf("FetchRange of destination list is:\n%v\ndifferences are:\n%v", remaining, diff)
 	}
 }
 

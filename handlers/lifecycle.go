@@ -11,6 +11,7 @@ import (
 	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -34,7 +35,14 @@ func LaunchHandler(c *gin.Context) {
 		return
 	}
 	storage.ObserveClientLaunch(clientType, clientId, profileId)
-	// make sure any update annotation has been removed,
+	// make sure the client knows whether they're enrolled in the study
+	isEnrolled, err := storage.GetProfileStudyMembership(profileId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+		return
+	}
+	c.Header("X-Study-Membership-Update", strconv.FormatBool(isEnrolled != ""))
+	// make sure any other update annotation has been removed,
 	// because clients update everything at launch
 	c.Header("X-Speech-Settings-Update", "")
 	c.Header("X-Favorites-Update", "")

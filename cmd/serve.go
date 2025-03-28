@@ -25,7 +25,7 @@ var serveCmd = &cobra.Command{
 		port, _ := cmd.Flags().GetString("port")
 		err := platform.PushConfig(env)
 		if err != nil {
-			panic(fmt.Sprintf("Can't load configuration: %v", err))
+			log.Fatalf("Can't load configuration: %v", err)
 		}
 		defer platform.PopConfig()
 		serve(address, port)

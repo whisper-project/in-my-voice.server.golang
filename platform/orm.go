@@ -434,6 +434,24 @@ func FetchOneBlocking[T List](ctx context.Context, obj T, onLeft bool, timeout t
 	return res.Val(), nil
 }
 
+func MoveOne[T List](ctx context.Context, src T, dst T, srcLeft bool, dstLeft bool) (string, error) {
+	db, prefix := GetDb()
+	srcKey := prefix + src.StoragePrefix() + src.StorageId()
+	dstKey := prefix + dst.StoragePrefix() + dst.StorageId()
+	srcSide, dstSide := "right", "right"
+	if srcLeft {
+		srcSide = "left"
+	}
+	if dstLeft {
+		dstSide = "left"
+	}
+	res := db.LMove(ctx, srcKey, dstKey, srcSide, dstSide)
+	if err := res.Err(); err != nil {
+		return "", err
+	}
+	return res.Val(), nil
+}
+
 func PushRange[T List](ctx context.Context, obj T, onLeft bool, members ...string) error {
 	db, prefix := GetDb()
 	key := prefix + obj.StoragePrefix() + obj.StorageId()
