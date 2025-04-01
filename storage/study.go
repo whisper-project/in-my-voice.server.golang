@@ -187,19 +187,19 @@ func UnassignStudyParticipant(profileId string, upn string) error {
 	return nil
 }
 
-func AvailableParticipantIds() ([]string, error) {
-	return allParticipantIds("available-study-participants")
+func AvailableParticipantIdsUtility() ([]string, error) {
+	return allParticipantIdsUtility("available-study-participants")
 }
 
-func UsedParticipantIds() ([]string, error) {
-	return allParticipantIds("used-study-participants")
+func UsedParticipantIdsUtility() ([]string, error) {
+	return allParticipantIdsUtility("used-study-participants")
 }
 
-func UnassignedParticipantIds() ([]string, error) {
-	return allParticipantIds("unassigned-study-participants")
+func UnassignedParticipantIdsUtility() ([]string, error) {
+	return allParticipantIdsUtility("unassigned-study-participants")
 }
 
-func AssignedProfilesParticipantIds() (map[string]string, error) {
+func AssignedProfilesParticipantIdsUtility() (map[string]string, error) {
 	result, err := platform.MapGetAll(sCtx(), profileParticipantMap)
 	if err != nil {
 		return nil, err
@@ -207,7 +207,18 @@ func AssignedProfilesParticipantIds() (map[string]string, error) {
 	return result, nil
 }
 
-func allParticipantIds(kind string) ([]string, error) {
+func ReuseUnassignedParticipantsUtility() error {
+	upnList, err := allParticipantIdsUtility("unassigned-study-participants")
+	if err = platform.AddMembers(sCtx(), availableStudyParticipants, upnList...); err != nil {
+		return err
+	}
+	if err = platform.DeleteStorage(sCtx(), unassignedStudyParticipants); err != nil {
+		return err
+	}
+	return nil
+}
+
+func allParticipantIdsUtility(kind string) ([]string, error) {
 	result, err := platform.FetchMembers(sCtx(), platform.StorableSet(kind))
 	if err != nil {
 		return nil, err

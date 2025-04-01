@@ -50,7 +50,7 @@ func reportParticipants() {
 
 func reportAvailable() {
 	fmt.Printf("These participant IDs have not yet been assigned:\n")
-	ids, err := storage.AvailableParticipantIds()
+	ids, err := storage.AvailableParticipantIdsUtility()
 	if err != nil {
 		log.Fatalf("Failed to get available participants: %v", err)
 	}
@@ -64,11 +64,11 @@ func reportAvailable() {
 
 func reportAssigned() {
 	fmt.Printf("Assigned profiles and participant IDs:\n")
-	forward, err := storage.AssignedProfilesParticipantIds()
+	forward, err := storage.AssignedProfilesParticipantIdsUtility()
 	if err != nil {
 		log.Fatalf("Failed to get profile to participant ID mapping: %v", err)
 	}
-	used, err := storage.UsedParticipantIds()
+	used, err := storage.UsedParticipantIdsUtility()
 	if err != nil {
 		log.Fatalf("Failed to get used participant IDs: %v", err)
 	}
@@ -120,7 +120,7 @@ func reportAssigned() {
 
 func reportUnassigned() {
 	fmt.Printf("These participant IDs were assigned, but their users have left the study:\n")
-	ids, err := storage.UnassignedParticipantIds()
+	ids, err := storage.UnassignedParticipantIdsUtility()
 	if err != nil {
 		log.Fatalf("Failed to get unassigned participants: %v", err)
 	}
