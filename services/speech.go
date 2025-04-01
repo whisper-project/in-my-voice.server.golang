@@ -12,18 +12,21 @@ import (
 	"net/http"
 )
 
-func ElevenParseSettings(settings string) (apiKey, voiceId string, ok bool) {
+func ElevenParseSettings(settings string) (apiKey, voiceId, voiceName string, ok bool) {
 	var s map[string]any
 	if err := json.Unmarshal([]byte(settings), &s); err != nil {
-		return "", "", false
+		return "", "", "", false
 	}
-	apiKey, aOk := s["apiKey"].(string)
-	voiceId, vOk := s["voiceId"].(string)
-	return apiKey, voiceId, aOk && vOk
+	var aOk, vOk, nOk bool
+	apiKey, aOk = s["apiKey"].(string)
+	voiceId, vOk = s["voiceId"].(string)
+	voiceName, nOk = s["voiceName"].(string)
+	ok = aOk && vOk && nOk
+	return
 }
 
-func ElevenLabsGenerateSettings(apiKey, voiceId string) string {
-	s := map[string]string{"apiKey": apiKey, "voiceId": voiceId}
+func ElevenLabsGenerateSettings(apiKey, voiceId, voiceName string) string {
+	s := map[string]string{"apiKey": apiKey, "voiceId": voiceId, "voiceName": voiceName}
 	b, _ := json.Marshal(s)
 	return string(b)
 }
@@ -44,20 +47,30 @@ func ElevenValidateApiKey(apiKey string) (bool, error) {
 	return resp.StatusCode == http.StatusOK, nil
 }
 
-func ElevenValidateVoiceId(apiKey, voiceId string) (bool, error) {
+// ElevenValidateVoiceId returns ok = true and the voice name if the voiceId is valid
+func ElevenValidateVoiceId(apiKey, voiceId string) (name string, ok bool, err error) {
 	uri := fmt.Sprintf("https://api.us.elevenlabs.io/v1/voices/%s", voiceId)
-	req, err := http.NewRequest("GET", uri, nil)
+	var req *http.Request
+	req, err = http.NewRequest("GET", uri, nil)
 	if err != nil {
-		return false, err
+		return
 	}
 	req.Header.Set("xi-api-key", apiKey)
 	client := &http.Client{}
-	resp, err := client.Do(req)
+	var resp *http.Response
+	resp, err = client.Do(req)
 	if err != nil {
-		return false, err
+		return
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK, nil
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+	var v VoiceInfo
+	if err = json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		return
+	}
+	return v.Name, true, nil
 }
 
 type VoiceInfo struct {
@@ -97,9 +110,10 @@ func ElevenFetchVoices(apiKey string) ([]VoiceInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
 		var v VoiceList
-		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		err = json.NewDecoder(resp.Body).Decode(&v)
+		resp.Body.Close()
+		if err != nil {
 			return nil, err
 		}
 		voices = append(voices, v.Voices...)

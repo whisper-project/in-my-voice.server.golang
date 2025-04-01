@@ -15,9 +15,10 @@ import (
 )
 
 type StudyParticipant struct {
-	Upn     string `redis:"upn"`
-	ApiKey  string `redis:"apiKey"`
-	VoiceId string `redis:"voiceId"`
+	Upn       string `redis:"upn"`
+	ApiKey    string `redis:"apiKey"`
+	VoiceId   string `redis:"voiceId"`
+	VoiceName string `redis:"voiceName"`
 }
 
 func (s *StudyParticipant) StoragePrefix() string {
@@ -64,12 +65,13 @@ func NewParticipant(upn, apiKey, voiceId string) (*StudyParticipant, error) {
 	} else if !ok {
 		return nil, nil
 	}
-	if ok, err := services.ElevenValidateVoiceId(apiKey, voiceId); err != nil {
+	name, ok, err := services.ElevenValidateVoiceId(apiKey, voiceId)
+	if err != nil {
 		return nil, err
 	} else if !ok {
 		return nil, nil
 	}
-	return &StudyParticipant{Upn: upn, ApiKey: apiKey, VoiceId: voiceId}, nil
+	return &StudyParticipant{Upn: upn, ApiKey: apiKey, VoiceId: voiceId, VoiceName: name}, nil
 }
 
 var (
@@ -159,7 +161,7 @@ func AssignStudyParticipant(profileId, upn string) (string, error) {
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
 	}
-	s := services.ElevenLabsGenerateSettings(p.ApiKey, p.VoiceId)
+	s := services.ElevenLabsGenerateSettings(p.ApiKey, p.VoiceId, p.VoiceName)
 	return s, nil
 }
 

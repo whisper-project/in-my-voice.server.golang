@@ -51,7 +51,8 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read request body"})
 		return
 	}
-	apiKey, voiceId, ok := services.ElevenParseSettings(string(body))
+	settings := string(body)
+	apiKey, voiceId, voiceName, ok := services.ElevenParseSettings(settings)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid settings"})
 		return
@@ -78,17 +79,26 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, voices)
 		return
 	}
-	if ok, err := services.ElevenValidateVoiceId(apiKey, voiceId); err != nil {
+	name, ok, err := services.ElevenValidateVoiceId(apiKey, voiceId)
+	if err != nil {
 		middleware.CtxLog(c).Error("network failure validating voice ID", zap.Error(err))
 		c.JSON(http.StatusBadGateway, gin.H{"status": "error", "error": "Network error reaching ElevenLabs"})
 		return
-	} else if !ok {
+	}
+	if !ok {
 		middleware.CtxLog(c).Info("invalid voice ID", zap.String("voiceId", voiceId),
 			zap.String("clientId", clientId), zap.String("profileId", profileId))
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "invalid voice ID"})
+		return
+	}
+	if name != voiceName {
+		middleware.CtxLog(c).Info("uploaded voice name does not match voice ID, fixing it",
+			zap.String("actual name", voiceId), zap.String("uploaded name", voiceName),
+		)
+		settings = services.ElevenLabsGenerateSettings(apiKey, voiceId, name)
 	}
 	// validation complete: update the voice settings
-	changed, err := storage.UpdateSpeechSettings(profileId, string(body))
+	changed, err := storage.UpdateSpeechSettings(profileId, settings)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
