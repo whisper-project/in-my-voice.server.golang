@@ -57,6 +57,19 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid settings"})
 		return
 	}
+	if apiKey == "" {
+		// user wants to delete their voice settings, oblige them
+		if err := storage.DeleteSpeechSettings(profileId); err != nil {
+			c.JSON(500, gin.H{"status": "error", "error": "database failure"})
+			return
+		}
+		defer func() {
+			_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+		}()
+		c.Header("X-Speech-Settings-Update", "true")
+		c.Status(204)
+		return
+	}
 	if ok, err := services.ElevenValidateApiKey(apiKey); err != nil {
 		middleware.CtxLog(c).Error("network failure validating API key", zap.Error(err))
 		c.JSON(http.StatusBadGateway, gin.H{"status": "error", "error": "Network error reaching ElevenLabs"})
