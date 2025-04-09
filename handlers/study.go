@@ -85,16 +85,9 @@ func LeaveStudyHandler(c *gin.Context) {
 		c.JSON(500, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
-	// user is now out of the study, delete their settings and tell them
-	if err := storage.DeleteSpeechSettings(profileId); err != nil {
-		c.JSON(500, gin.H{"status": "error", "error": "database failure"})
-	}
-	defer func() {
-		_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
-	}()
+	// user is now out of the study, but they retain their speech settings
 	middleware.CtxLog(c).Info("study ID unassigned",
 		zap.String("clientId", clientId), zap.String("profileId", profileId), zap.String("studyId", upn))
 	c.Header("X-Study-Membership-Update", "false")
-	c.Header("X-Speech-Settings-Update", "true")
 	c.Status(204)
 }
