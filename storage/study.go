@@ -130,39 +130,43 @@ func GetProfileStudyMembership(profileId string) (string, error) {
 	return upn, nil
 }
 
-func AssignStudyParticipant(profileId, upn string) (string, error) {
-	if ok, err := platform.IsMember(sCtx(), availableStudyParticipants, upn); err != nil {
+func AssignStudyParticipant(profileId, upn string) (settings, apiKey string, err error) {
+	var ok bool
+	if ok, err = platform.IsMember(sCtx(), availableStudyParticipants, upn); err != nil {
 		sLog().Error("move one failure on participant assignment",
 			zap.String("profileId", profileId), zap.Error(err))
-		return "", err
+		return
 	} else if !ok {
-		return "", ParticipantNotAvailableError
+		err = ParticipantNotAvailableError
+		return
 	}
-	if err := platform.AddMembers(sCtx(), usedStudyParticipants, upn); err != nil {
+	if err = platform.AddMembers(sCtx(), usedStudyParticipants, upn); err != nil {
 		sLog().Error("add member failure on participant assignment",
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
-		return "", err
+		return
 	}
-	if err := platform.RemoveMembers(sCtx(), availableStudyParticipants, upn); err != nil {
+	if err = platform.RemoveMembers(sCtx(), availableStudyParticipants, upn); err != nil {
 		sLog().Error("remove member failure on participant assignment",
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
+		return
 	}
 	p := &StudyParticipant{Upn: upn}
-	if err := platform.LoadFields(sCtx(), p); err != nil {
+	if err = platform.LoadFields(sCtx(), p); err != nil {
 		sLog().Error("load fields failure on participant assignment",
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
-		return "", err
+		return
 	}
-	if err := platform.MapSet(sCtx(), profileParticipantMap, profileId, upn); err != nil {
+	if err = platform.MapSet(sCtx(), profileParticipantMap, profileId, upn); err != nil {
 		sLog().Error("map set failure on participant assignment",
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
 	}
-	s := services.ElevenLabsGenerateSettings(p.ApiKey, p.VoiceId, p.VoiceName)
-	return s, nil
+	apiKey = p.ApiKey
+	settings = services.ElevenLabsGenerateSettings(apiKey, p.VoiceId, p.VoiceName)
+	return
 }
 
 func UnassignStudyParticipant(profileId string, upn string) error {

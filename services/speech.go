@@ -7,7 +7,9 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -121,4 +123,58 @@ func ElevenFetchVoices(apiKey string) ([]VoiceInfo, error) {
 		nextPageToken = v.NextPageToken
 	}
 	return voices, nil
+}
+
+type ElevenUserAccountInfo struct {
+	Tier                           string `json:"tier"`
+	CharacterCount                 int64  `json:"character_count"`
+	CharacterLimit                 int64  `json:"character_limit"`
+	CanExtendCharacterLimit        bool   `json:"can_extend_character_limit"`
+	AllowedToExtendCharacterLimit  bool   `json:"allowed_to_extend_character_limit"`
+	VoiceSlotsUsed                 int64  `json:"voice_slots_used"`
+	ProfessionalVoiceSlotsUsed     int64  `json:"professional_voice_slots_used"`
+	VoiceLimit                     int64  `json:"voice_limit"`
+	VoiceAddEditCounter            int64  `json:"voice_add_edit_counter"`
+	ProfessionalVoiceLimit         int64  `json:"professional_voice_limit"`
+	CanExtendVoiceLimit            bool   `json:"can_extend_voice_limit"`
+	CanUseInstantVoiceCloning      bool   `json:"can_use_instant_voice_cloning"`
+	CanUseProfessionalVoiceCloning bool   `json:"can_use_professional_voice_cloning"`
+	Status                         string `json:"status"`
+	HasOpenInvoices                bool   `json:"has_open_invoices"`
+	MaxCharacterLimitExtension     int64  `json:"max_character_limit_extension"`
+	NextCharacterCountResetUnix    int64  `json:"next_character_count_reset_unix"`
+	MaxVoiceAddEdits               int64  `json:"max_voice_add_edits"`
+	Currency                       string `json:"currency"`
+	BillingPeriod                  string `json:"billing_period"`
+	CharacterRefreshPeriod         string `json:"character_refresh_period"`
+}
+
+var ElevenInvalidApiKeyError = errors.New("invalid ElevenLabs api key")
+
+func ElevenCheckUserAccount(ctx context.Context, apiKey string) (*ElevenUserAccountInfo, error) {
+	uri := "https://api.us.elevenlabs.io/v1/user/subscription"
+	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("xi-api-key", apiKey)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		break
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return nil, ElevenInvalidApiKeyError
+	default:
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+	var info ElevenUserAccountInfo
+	if err = json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, err
+	}
+	return &info, nil
 }

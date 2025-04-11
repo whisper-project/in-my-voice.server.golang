@@ -65,6 +65,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		}
 		defer func() {
 			_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+			_ = storage.RemoveMonitor(profileId)
 		}()
 		c.Header("X-Speech-Settings-Update", "true")
 		c.Status(204)
@@ -120,6 +121,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		c.Header("X-Speech-Settings-Update", "true")
 		defer func() {
 			_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+			_ = storage.EnsureMonitor(profileId, apiKey)
 		}()
 	}
 	middleware.CtxLog(c).Info("speech settings updated",

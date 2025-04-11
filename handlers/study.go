@@ -38,7 +38,7 @@ func JoinStudyHandler(c *gin.Context) {
 			zap.String("studyId", studyId))
 		c.JSON(403, gin.H{"status": "error", "error": "study ID already assigned"})
 	}
-	settings, err := storage.AssignStudyParticipant(profileId, studyId)
+	settings, apiKey, err := storage.AssignStudyParticipant(profileId, studyId)
 	if errors.Is(err, storage.ParticipantNotAvailableError) {
 		middleware.CtxLog(c).Info("study ID invalid or not available",
 			zap.String("clientId", clientId), zap.String("profileId", profileId),
@@ -57,6 +57,7 @@ func JoinStudyHandler(c *gin.Context) {
 	}
 	defer func() {
 		_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+		_ = storage.EnsureMonitor(profileId, apiKey)
 	}()
 	middleware.CtxLog(c).Info("study ID assigned",
 		zap.String("clientId", clientId), zap.String("profileId", profileId),

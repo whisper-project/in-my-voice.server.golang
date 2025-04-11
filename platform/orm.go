@@ -395,6 +395,16 @@ func RemoveScoredMember[T SortedSet](ctx context.Context, obj T, member string) 
 	return nil
 }
 
+func GetMemberScore[T SortedSet](ctx context.Context, obj T, member string) (float64, error) {
+	db, prefix := GetDb()
+	key := prefix + obj.StoragePrefix() + obj.StorageId()
+	res := db.ZScore(ctx, key, member)
+	if err := res.Err(); err != nil {
+		return 0, err
+	}
+	return res.Val(), nil
+}
+
 type List interface {
 	Storable
 	~string
