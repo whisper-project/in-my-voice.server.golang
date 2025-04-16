@@ -111,4 +111,9 @@ func AnnotateResponse(c *gin.Context, clientId, profileId string) {
 		c.Header("X-Favorites-Update", "YES")
 		_ = storage.ProfileClientFavoritesWasNotified(profileId, clientId)
 	}
+	needsNotification, _ = storage.ProfileClientUsageNeedsNotification(profileId, clientId)
+	if needsNotification {
+		c.Header("X-Usage-Update", "YES")
+		_ = storage.ProfileClientUsageWasNotified(profileId, clientId)
+	}
 }

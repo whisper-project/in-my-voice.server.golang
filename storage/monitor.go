@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	speechMonitors       platform.StorableSortedSet = "speech-monitors"
-	maxCharsPerHour      int64                      = 60 * 5 * 30      // 60 wpm at 5 chars/word for 30 minutes
-	maxMonitorCheckDelay int64                      = 7 * 24 * 60 * 60 // 1 week
+	speechMonitors platform.StorableSortedSet = "speech-monitors"
+	maxCharsPerDay int64                      = 60 * 5 * 30 * 12 // 60 wpm at 5 chars/word for 30 mins half a day
+	maxRateDelay   int64                      = 7 * 24 * 60 * 60 // 1 week
 )
 
 // EnsureMonitor makes sure that the given profile is having its ElevenLabs account
@@ -136,6 +136,11 @@ func NewSpeechMonitor(profileId, apiKey string) *SpeechMonitor {
 }
 
 func (s *SpeechMonitor) Update(ctx context.Context) error {
+	var lastPct int64
+	if s.LimitChars > 0 {
+		lastPct = s.UsedChars * 100 / s.LimitChars
+	}
+	lastRenew := s.NextRenew
 	info, err := services.ElevenCheckUserAccount(ctx, s.ApiKey)
 	if err != nil {
 		sLog().Error("Eleven Labs user account check failed",
@@ -145,10 +150,71 @@ func (s *SpeechMonitor) Update(ctx context.Context) error {
 	s.UsedChars = info.CharacterCount
 	s.LimitChars = info.CharacterLimit
 	s.NextRenew = info.NextCharacterCountResetUnix
-	nextDelay := ((s.LimitChars - s.UsedChars) * 3600) / maxCharsPerHour
-	s.NextCheck = time.Now().Unix() + min(nextDelay, maxMonitorCheckDelay)
+	curPct := s.UsedChars * 100 / s.LimitChars
+	rateDelay := min(((s.LimitChars-s.UsedChars)*24*3600)/maxCharsPerDay, maxRateDelay)
+	s.NextCheck = min(time.Now().Unix()+rateDelay, s.NextRenew)
+	switch {
+	case lastRenew < s.NextRenew && lastPct >= 99:
+		// we've renewed and the person had been cut off, re-enable them
+		_ = ProfileUsageDidUpdate(s.ProfileId)
+	case curPct >= 99 && lastPct < 99:
+		// user has hit their quota, notify them
+		_ = ProfileUsageDidUpdate(s.ProfileId)
+		// don't check again until nextRenew
+		s.NextCheck = s.NextRenew
+	case curPct >= 90 && lastPct < 90:
+		// user just got to 90%, warn them
+		_ = ProfileUsageDidUpdate(s.ProfileId)
+		fallthrough
+	case curPct >= 90:
+		// user is approaching their cutoff, check every hour
+		s.NextRenew = time.Now().Unix() + 3500
+	}
 	sLog().Info("Completed monitor update",
-		zap.String("profileId", s.ProfileId), zap.Int64("usedChars", s.UsedChars),
-		zap.Int64("limitChars", s.LimitChars), zap.Time("nextCheck", time.Unix(s.NextCheck, 0)))
+		zap.String("profileId", s.ProfileId), zap.Int64("pctUsed", curPct),
+		zap.Int64("usedChars", s.UsedChars), zap.Int64("limitChars", s.LimitChars),
+		zap.Time("nextCheck", time.Unix(s.NextCheck, 0)))
+	return nil
+}
+
+type NotifiedUsageClients string
+
+func (n NotifiedUsageClients) StoragePrefix() string {
+	return "notified-usage-clients:"
+}
+
+func (n NotifiedUsageClients) StorageId() string {
+	return string(n)
+}
+
+func ProfileUsageDidUpdate(profileId string) error {
+	n := NotifiedUsageClients(profileId)
+	if err := platform.DeleteStorage(sCtx(), n); err != nil {
+		sLog().Error("delete storage failure", zap.Error(err))
+		return err
+	}
+	if err := platform.AddMembers(sCtx(), n, "none"); err != nil {
+		sLog().Error("add set member failed", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+func ProfileClientUsageNeedsNotification(profileId, clientId string) (bool, error) {
+	n := NotifiedUsageClients(profileId)
+	isMember, err := platform.IsMember(sCtx(), n, clientId)
+	if err != nil {
+		sLog().Error("lookup set member failed", zap.Error(err))
+		return false, err
+	}
+	return !isMember, nil
+}
+
+func ProfileClientUsageWasNotified(profileId, clientId string) error {
+	n := NotifiedUsageClients(profileId)
+	if err := platform.AddMembers(sCtx(), n, clientId); err != nil {
+		sLog().Error("add set member failed", zap.Error(err))
+		return err
+	}
 	return nil
 }
