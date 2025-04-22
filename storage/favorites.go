@@ -39,7 +39,7 @@ func (f *FavoritesSettings) SetStorageId(id string) error {
 	return nil
 }
 
-func (f *FavoritesSettings) Copy() platform.StructPointer {
+func (f *FavoritesSettings) Copy() platform.Object {
 	if f == nil {
 		return nil
 	}
@@ -48,7 +48,7 @@ func (f *FavoritesSettings) Copy() platform.StructPointer {
 	return n
 }
 
-func (f *FavoritesSettings) Downgrade(a any) (platform.StructPointer, error) {
+func (f *FavoritesSettings) Downgrade(a any) (platform.Object, error) {
 	if o, ok := a.(FavoritesSettings); ok {
 		return &o, nil
 	}
@@ -69,11 +69,11 @@ func NewFavoritesSettings(profileId, settings string) *FavoritesSettings {
 
 func GetFavoritesSettings(profileId string) (*FavoritesSettings, error) {
 	f := &FavoritesSettings{ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), f); err != nil {
-		if errors.Is(err, platform.StructPointerNotFoundError) {
+	if err := platform.LoadObject(sCtx(), f); err != nil {
+		if errors.Is(err, platform.NotFoundError) {
 			return nil, nil
 		}
-		sLog().Error("load fields failure on settings fetch",
+		sLog().Error("db failure on settings fetch",
 			zap.String("profileId", profileId), zap.Error(err))
 		return nil, err
 	}
@@ -83,9 +83,9 @@ func GetFavoritesSettings(profileId string) (*FavoritesSettings, error) {
 func UpdateFavoritesSettings(profileId, settings string) (bool, error) {
 	n := NewFavoritesSettings(profileId, settings)
 	o := &FavoritesSettings{ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), o); err != nil {
-		if !errors.Is(err, platform.StructPointerNotFoundError) {
-			sLog().Error("load fields failure on settings update",
+	if err := platform.LoadObject(sCtx(), o); err != nil {
+		if !errors.Is(err, platform.NotFoundError) {
+			sLog().Error("db failure on settings update",
 				zap.String("profileId", profileId), zap.Error(err))
 			return false, err
 		}
@@ -93,8 +93,8 @@ func UpdateFavoritesSettings(profileId, settings string) (bool, error) {
 	if o.ETag == n.ETag {
 		return false, nil
 	}
-	if err := platform.SaveFields(sCtx(), n); err != nil {
-		sLog().Error("save fields failure on settings update",
+	if err := platform.SaveObject(sCtx(), n); err != nil {
+		sLog().Error("db failure on settings update",
 			zap.String("profileId", profileId), zap.Error(err))
 		return false, err
 	}

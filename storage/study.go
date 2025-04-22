@@ -40,7 +40,7 @@ func (s *StudyParticipant) SetStorageId(id string) error {
 	return nil
 }
 
-func (s *StudyParticipant) Copy() platform.StructPointer {
+func (s *StudyParticipant) Copy() platform.Object {
 	if s == nil {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (s *StudyParticipant) Copy() platform.StructPointer {
 	return n
 }
 
-func (s *StudyParticipant) Downgrade(a any) (platform.StructPointer, error) {
+func (s *StudyParticipant) Downgrade(a any) (platform.Object, error) {
 	if o, ok := a.(StudyParticipant); ok {
 		return &o, nil
 	}
@@ -107,8 +107,8 @@ func AddStudyParticipant(upn, apiKey, voiceId string) error {
 	if n == nil {
 		return ParticipantNotValidError
 	}
-	if err := platform.SaveFields(sCtx(), n); err != nil {
-		sLog().Error("save fields failure adding participant",
+	if err := platform.SaveObject(sCtx(), n); err != nil {
+		sLog().Error("db failure adding participant",
 			zap.String("studyId", upn), zap.Error(err))
 		return err
 	}
@@ -153,8 +153,8 @@ func AssignStudyParticipant(profileId, upn string) (settings, apiKey string, err
 		return
 	}
 	p := &StudyParticipant{Upn: upn}
-	if err = platform.LoadFields(sCtx(), p); err != nil {
-		sLog().Error("load fields failure on participant assignment",
+	if err = platform.LoadObject(sCtx(), p); err != nil {
+		sLog().Error("db failure on participant assignment",
 			zap.String("profileId", profileId), zap.String("studyId", upn),
 			zap.Error(err))
 		return

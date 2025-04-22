@@ -9,13 +9,14 @@ package lifecycle
 import (
 	"context"
 	"errors"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"

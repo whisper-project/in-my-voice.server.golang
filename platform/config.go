@@ -9,6 +9,7 @@ package platform
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dotenv-org/godotenvvault"
@@ -16,10 +17,10 @@ import (
 
 type Environment struct {
 	Name           string
-	ApnsUrl        string
-	ApnsCredSecret string
-	ApnsCredId     string
-	ApnsTeamId     string
+	SmtpHost       string
+	SmtpPort       int
+	SmtpCredSecret string
+	SmtpCredId     string
 	DbUrl          string
 	DbKeyPrefix    string
 }
@@ -28,10 +29,10 @@ type Environment struct {
 var (
 	ciConfig = Environment{
 		Name:           "CI",
-		ApnsUrl:        "http://localhost:2197",
-		ApnsCredSecret: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgGSZi+0fnzC8bbBbI\nD5wyNIgqnl7dFLN+FlUD/mOAG+ShRANCAASZU2wXczRjmlkcHJp4yHTl3KlAXoB8\nozM8I6bJBZPUGlTdIpvV2u2mLhKBZNZIUDaqdHKkfukSn+hgdZspMtaA\n-----END PRIVATE KEY-----",
-		ApnsCredId:     "89AB98CD89",
-		ApnsTeamId:     "8CD8989AB9",
+		SmtpHost:       "localhost",
+		SmtpPort:       2500,
+		SmtpCredSecret: "",
+		SmtpCredId:     "",
 		DbUrl:          "redis://",
 		DbKeyPrefix:    "c:",
 	}
@@ -103,12 +104,20 @@ func pushEnvConfig(filename string) error {
 		return fmt.Errorf("error loading .env vars: %v", err)
 	}
 	configStack = append(configStack, loadedConfig)
+	getEnvInt := func(s string) int {
+		val, _ := strconv.Atoi(s)
+		if val <= 0 {
+			return 25
+		} else {
+			return val
+		}
+	}
 	loadedConfig = Environment{
 		Name:           os.Getenv("ENVIRONMENT_NAME"),
-		ApnsUrl:        os.Getenv("APNS_SERVER"),
-		ApnsCredSecret: os.Getenv("APNS_CRED_SECRET_PKCS8"),
-		ApnsCredId:     os.Getenv("APNS_CRED_ID"),
-		ApnsTeamId:     os.Getenv("APNS_TEAM_ID"),
+		SmtpHost:       os.Getenv("SMTP_HOST"),
+		SmtpPort:       getEnvInt(os.Getenv("SMTP_PORT")),
+		SmtpCredSecret: os.Getenv("SMTP_CRED_SECRET"),
+		SmtpCredId:     os.Getenv("SMTP_CRED_ID"),
 		DbUrl:          os.Getenv("REDIS_URL"),
 		DbKeyPrefix:    os.Getenv("DB_KEY_PREFIX"),
 	}

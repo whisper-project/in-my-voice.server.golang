@@ -56,7 +56,7 @@ func (l *LifecycleData) SetStorageId(id string) error {
 	return nil
 }
 
-func (l *LifecycleData) Copy() platform.StructPointer {
+func (l *LifecycleData) Copy() platform.Object {
 	if l == nil {
 		return nil
 	}
@@ -65,7 +65,7 @@ func (l *LifecycleData) Copy() platform.StructPointer {
 	return n
 }
 
-func (l *LifecycleData) Downgrade(a any) (platform.StructPointer, error) {
+func (l *LifecycleData) Downgrade(a any) (platform.Object, error) {
 	if o, ok := a.(LifecycleData); ok {
 		return &o, nil
 	}
@@ -84,11 +84,11 @@ func NewLifecycleData(clientId, profileId string) *LifecycleData {
 
 func ObserveClientLaunch(clientType, clientId, profileId string) {
 	l := &LifecycleData{ClientId: clientId, ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), l); err != nil {
-		if errors.Is(err, platform.StructPointerNotFoundError) {
+	if err := platform.LoadObject(sCtx(), l); err != nil {
+		if errors.Is(err, platform.NotFoundError) {
 			l = NewLifecycleData(clientId, profileId)
 		} else {
-			sLog().Error("load fields failure on client launch",
+			sLog().Error("db failure on client launch",
 				zap.String("clientType", clientType), zap.String("clientId", clientId),
 				zap.String("profileId", profileId), zap.Error(err))
 			return
@@ -98,8 +98,8 @@ func ObserveClientLaunch(clientType, clientId, profileId string) {
 	l.LaunchCount++
 	l.LastLaunch = time.Now().UnixMilli()
 	l.LastActive = l.LastLaunch
-	if err := platform.SaveFields(sCtx(), l); err != nil {
-		sLog().Error("save fields failure on client launch",
+	if err := platform.SaveObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client launch",
 			zap.String("clientType", clientType), zap.String("clientId", clientId),
 			zap.String("profileId", profileId), zap.Error(err))
 	}
@@ -107,28 +107,28 @@ func ObserveClientLaunch(clientType, clientId, profileId string) {
 
 func ObserveClientActive(clientId, profileId string) {
 	l := &LifecycleData{ClientId: clientId, ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), l); err != nil {
-		sLog().Error("load fields failure on client active",
+	if err := platform.LoadObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client active",
 			zap.String("profileId", profileId), zap.Error(err))
 		return
 	}
 	l.LastActive = time.Now().UnixMilli()
-	if err := platform.SaveFields(sCtx(), l); err != nil {
-		sLog().Error("save fields failure on client active",
+	if err := platform.SaveObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client active",
 			zap.String("profileId", profileId), zap.Error(err))
 	}
 }
 
 func ObserveClientShutdown(clientId, profileId string) {
 	l := &LifecycleData{ClientId: clientId, ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), l); err != nil {
-		sLog().Error("load fields failure on client shutdown",
+	if err := platform.LoadObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client shutdown",
 			zap.String("profileId", profileId), zap.Error(err))
 		return
 	}
 	l.LastShutdown = time.Now().UnixMilli()
-	if err := platform.SaveFields(sCtx(), l); err != nil {
-		sLog().Error("save fields failure on client shutdown",
+	if err := platform.SaveObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client shutdown",
 			zap.String("profileId", profileId), zap.Error(err))
 	}
 }

@@ -28,8 +28,8 @@ func EnsureMonitor(profileId, apiKey string) error {
 		return nil
 	}
 	s := NewSpeechMonitor(profileId, apiKey)
-	if err := platform.SaveFields(sCtx(), s); err != nil {
-		sLog().Error("Failed to save fields of new monitor",
+	if err := platform.SaveObject(sCtx(), s); err != nil {
+		sLog().Error("Failed to db of new monitor",
 			zap.String("profileId", profileId), zap.Error(err))
 		return err
 	}
@@ -73,8 +73,8 @@ func FetchMonitorsForUpdate(ctx context.Context) ([]*SpeechMonitor, error) {
 			return nil, ctx.Err()
 		default:
 			s := SpeechMonitor{ProfileId: profile}
-			if err := platform.LoadFields(ctx, &s); err != nil {
-				sLog().Error("Failed to load fields of monitor",
+			if err := platform.LoadObject(ctx, &s); err != nil {
+				sLog().Error("Failed to db of monitor",
 					zap.String("profileId", profile), zap.Error(err))
 				return nil, err
 			}
@@ -112,7 +112,7 @@ func (s *SpeechMonitor) SetStorageId(id string) error {
 	return nil
 }
 
-func (s *SpeechMonitor) Copy() platform.StructPointer {
+func (s *SpeechMonitor) Copy() platform.Object {
 	if s == nil {
 		return nil
 	}
@@ -121,7 +121,7 @@ func (s *SpeechMonitor) Copy() platform.StructPointer {
 	return n
 }
 
-func (s *SpeechMonitor) Downgrade(a any) (platform.StructPointer, error) {
+func (s *SpeechMonitor) Downgrade(a any) (platform.Object, error) {
 	if o, ok := a.(SpeechMonitor); ok {
 		return &o, nil
 	}
