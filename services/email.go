@@ -12,13 +12,15 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-func SendAuthenticationCodeViaEmail(address, code string) error {
+func SendLinkViaEmail(address, link string) error {
 	m := gomail.NewMessage()
 	m.SetHeader("From", "noreply@whisper-project.org")
 	m.SetHeader("To", address)
-	m.SetHeader("Subject", "In My Voice admin console login code")
-	msg := `To log into the administration console, please enter the following code:`
-	m.SetBody("text/plain", fmt.Sprintf("%s\n\n%s", msg, code))
+	m.SetHeader("Subject", "In My Voice login link")
+	msg := `To log into the administration console, please copy/paste this link into your browser:`
+	m.SetBody("text/plain", fmt.Sprintf("%s\n\n%s", msg, link))
+	msg = `<p>To log into the administration console, please click <a href="%s">this link</a>.</p>`
+	m.AddAlternative("text/html", fmt.Sprintf(msg, link))
 
 	env := platform.GetConfig()
 	d := gomail.NewDialer(env.SmtpHost, env.SmtpPort, env.SmtpCredId, env.SmtpCredSecret)

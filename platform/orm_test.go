@@ -18,16 +18,6 @@ import (
 	"github.com/go-test/deep"
 )
 
-type StorableString string
-
-func (s StorableString) StoragePrefix() string {
-	return "string:"
-}
-
-func (s StorableString) StorageId() string {
-	return string(s)
-}
-
 var ormTestString StorableString = "ormTestString"
 
 func TestStorableStringInterfaceDefinition(t *testing.T) {
@@ -76,16 +66,6 @@ func TestExpireAtString(t *testing.T) {
 	if val, err := FetchString(ctx, ormTestString); err == nil && val != "" {
 		t.Errorf("FetchString of expired string failed (%v), expected success with empty value (%s)", err, val)
 	}
-}
-
-type StorableSet string
-
-func (s StorableSet) StoragePrefix() string {
-	return "set:"
-}
-
-func (s StorableSet) StorageId() string {
-	return string(s)
 }
 
 var ormTestSet StorableSet = "ormTestSet"
@@ -141,16 +121,6 @@ func TestAddFetchIsRemoveMembers(t *testing.T) {
 	}
 }
 
-type StorableSortedSet string
-
-func (s StorableSortedSet) StoragePrefix() string {
-	return "zset:"
-}
-
-func (s StorableSortedSet) StorageId() string {
-	return string(s)
-}
-
 var ormTestSortedSet StorableSortedSet = "ormTestSortedSet"
 
 func TestStorableSortedSetInterfaceDefinition(t *testing.T) {
@@ -198,16 +168,6 @@ func TestSortedFetchAddScoreFetchRemoveMember(t *testing.T) {
 	if err := DeleteStorage(ctx, ormTestSortedSet); err != nil {
 		t.Error(err)
 	}
-}
-
-type StorableList string
-
-func (s StorableList) StoragePrefix() string {
-	return "list:"
-}
-
-func (s StorableList) StorageId() string {
-	return string(s)
 }
 
 var ormTestList StorableList = "ormTestList"
@@ -321,16 +281,6 @@ func TestMoveRange(t *testing.T) {
 	} else if diff := deep.Equal(remaining, []string{"b", "c"}); diff != nil {
 		t.Errorf("FetchRange of destination list is:\n%v\ndifferences are:\n%v", remaining, diff)
 	}
-}
-
-type StorableMap string
-
-func (s StorableMap) StoragePrefix() string {
-	return "map:"
-}
-
-func (s StorableMap) StorageId() string {
-	return string(s)
 }
 
 var ormTestMap StorableMap = "ormTestMap"

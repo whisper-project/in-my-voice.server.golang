@@ -7,8 +7,9 @@
 package storage
 
 import (
+	"bytes"
 	"context"
-	"fmt"
+	"encoding/gob"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"go.uber.org/zap"
@@ -85,50 +86,32 @@ func FetchMonitorsForUpdate(ctx context.Context) ([]*SpeechMonitor, error) {
 }
 
 type SpeechMonitor struct {
-	ProfileId  string `redis:"profileId"`
-	ApiKey     string `redis:"apiKey"`
-	UsedChars  int64  `redis:"usedChars"`
-	LimitChars int64  `redis:"limitChars"`
-	NextCheck  int64  `redis:"nextCheck"`
-	NextRenew  int64  `redis:"nextRenew"`
+	ProfileId  string
+	ApiKey     string
+	UsedChars  int64
+	LimitChars int64
+	NextCheck  int64
+	NextRenew  int64
 }
 
 func (s *SpeechMonitor) StoragePrefix() string {
 	return "speech-monitor:"
 }
-
 func (s *SpeechMonitor) StorageId() string {
 	if s == nil {
 		return ""
 	}
 	return s.ProfileId
 }
-
-func (s *SpeechMonitor) SetStorageId(id string) error {
-	if s == nil {
-		return fmt.Errorf("can't set id of nil %T", s)
+func (s *SpeechMonitor) ToRedis() ([]byte, error) {
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(s); err != nil {
+		return nil, err
 	}
-	s.ProfileId = id
-	return nil
+	return b.Bytes(), nil
 }
-
-func (s *SpeechMonitor) Copy() platform.Object {
-	if s == nil {
-		return nil
-	}
-	n := new(SpeechMonitor)
-	*n = *s
-	return n
-}
-
-func (s *SpeechMonitor) Downgrade(a any) (platform.Object, error) {
-	if o, ok := a.(SpeechMonitor); ok {
-		return &o, nil
-	}
-	if o, ok := a.(*SpeechMonitor); ok {
-		return o, nil
-	}
-	return nil, fmt.Errorf("not a %T: %#v", s, a)
+func (s *SpeechMonitor) FromRedis(b []byte) error {
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
 func NewSpeechMonitor(profileId, apiKey string) *SpeechMonitor {

@@ -17,6 +17,9 @@ import (
 
 type Environment struct {
 	Name           string
+	HttpScheme     string
+	HttpHost       string
+	HttpPort       int
 	SmtpHost       string
 	SmtpPort       int
 	SmtpCredSecret string
@@ -29,7 +32,10 @@ type Environment struct {
 var (
 	ciConfig = Environment{
 		Name:           "CI",
+		HttpScheme:     "http",
+		HttpHost:       "localhost",
 		SmtpHost:       "localhost",
+		HttpPort:       8080,
 		SmtpPort:       2500,
 		SmtpCredSecret: "",
 		SmtpCredId:     "",
@@ -114,6 +120,9 @@ func pushEnvConfig(filename string) error {
 	}
 	loadedConfig = Environment{
 		Name:           os.Getenv("ENVIRONMENT_NAME"),
+		HttpScheme:     os.Getenv("HTTP_SCHEME"),
+		HttpHost:       os.Getenv("HTTP_HOST"),
+		HttpPort:       getEnvInt(os.Getenv("HTTP_PORT")),
 		SmtpHost:       os.Getenv("SMTP_HOST"),
 		SmtpPort:       getEnvInt(os.Getenv("SMTP_PORT")),
 		SmtpCredSecret: os.Getenv("SMTP_CRED_SECRET"),

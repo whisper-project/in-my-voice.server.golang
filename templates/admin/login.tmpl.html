@@ -1,0 +1,35 @@
+{{ define "admin/login.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InMyVoice Admin Login</title>
+</head>
+<body>
+<h2>InMyVoice - Administrative Login</h2>
+{{if .error}}
+    <p>Sorry, but "{{.error}}" doesn't look like a valid email.</p>
+    <p>Please <a href="">click here</a> to try again with a valid email.</p>
+{{else if .success}}
+    <p>A login link has been emailed to {{.success}}. Click the link to log in.</p>
+    <p>If you need another email sent, <a href="">click here</a> to log in again.</p>
+{{else}}
+    <form method="POST">
+        <label for="email">Email:</label>
+        <input type="text" id="email" name="email" size="50" required>
+        <br>
+        <br />
+        <button type="submit">Request login link</button>
+        <br>
+    </form>
+{{end}}
+</body>
+</html>
+{{ end }}

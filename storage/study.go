@@ -7,56 +7,39 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
-	"fmt"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"go.uber.org/zap"
 )
 
 type StudyParticipant struct {
-	Upn       string `redis:"upn"`
-	ApiKey    string `redis:"apiKey"`
-	VoiceId   string `redis:"voiceId"`
-	VoiceName string `redis:"voiceName"`
+	Upn       string
+	ApiKey    string
+	VoiceId   string
+	VoiceName string
 }
 
 func (s *StudyParticipant) StoragePrefix() string {
 	return "study-participant:"
 }
-
 func (s *StudyParticipant) StorageId() string {
 	if s == nil {
 		return ""
 	}
 	return s.Upn
 }
-
-func (s *StudyParticipant) SetStorageId(id string) error {
-	if s == nil {
-		return fmt.Errorf("can't set id of nil %T", s)
+func (s *StudyParticipant) ToRedis() ([]byte, error) {
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(s); err != nil {
+		return nil, err
 	}
-	s.Upn = id
-	return nil
+	return b.Bytes(), nil
 }
-
-func (s *StudyParticipant) Copy() platform.Object {
-	if s == nil {
-		return nil
-	}
-	n := new(StudyParticipant)
-	*n = *s
-	return n
-}
-
-func (s *StudyParticipant) Downgrade(a any) (platform.Object, error) {
-	if o, ok := a.(StudyParticipant); ok {
-		return &o, nil
-	}
-	if o, ok := a.(*StudyParticipant); ok {
-		return o, nil
-	}
-	return nil, fmt.Errorf("not a %T: %#v", s, a)
+func (s *StudyParticipant) FromRedis(b []byte) error {
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
 func NewParticipant(upn, apiKey, voiceId string) (*StudyParticipant, error) {

@@ -1,0 +1,30 @@
+{{ define "admin/error.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Title</title>
+</head>
+<body>
+<h2>Unexpected Error</h2>
+
+<p>So sorry, but there was an unexpected error on the server
+while responding to your request.</p>
+
+<p>These sorts of errors are typically temporary.</p>
+
+<p><a href="{{.retry}}">Click here</a> to return to the page you were on,
+so you can try again.</p>
+
+<p><a href ="{{.logout}}">Click here</a> to log out and continue later.</p>
+{{ template "admin/footer.tmpl.html" }}
+</body>
+</html>
+{{ end }}

@@ -407,3 +407,48 @@ func MapObjects[T Object](ctx context.Context, f func(), obj T) error {
 	}
 	return nil
 }
+
+type StorableString string
+
+func (s StorableString) StoragePrefix() string {
+	return "string:"
+}
+func (s StorableString) StorageId() string {
+	return string(s)
+}
+
+type StorableSet string
+
+func (s StorableSet) StoragePrefix() string {
+	return "set:"
+}
+func (s StorableSet) StorageId() string {
+	return string(s)
+}
+
+type StorableSortedSet string
+
+func (s StorableSortedSet) StoragePrefix() string {
+	return "zset:"
+}
+func (s StorableSortedSet) StorageId() string {
+	return string(s)
+}
+
+type StorableList string
+
+func (s StorableList) StoragePrefix() string {
+	return "list:"
+}
+func (s StorableList) StorageId() string {
+	return string(s)
+}
+
+type StorableMap string
+
+func (s StorableMap) StoragePrefix() string {
+	return "map:"
+}
+func (s StorableMap) StorageId() string {
+	return string(s)
+}

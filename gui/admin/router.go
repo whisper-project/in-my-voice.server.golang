@@ -7,13 +7,22 @@
 package admin
 
 import (
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/whisper-project/in-my-voice.server.golang/handlers"
+	"github.com/whisper-project/in-my-voice.server.golang/storage"
 )
 
 func AddRoutes(r *gin.RouterGroup) {
-	store := cookie.NewStore([]byte(uuid.NewString()))
-	r.Use(sessions.Sessions("admin", store))
+	storage.AdminGuiPath = r.BasePath()
+	r.GET("/login", handlers.GetLoginHandler)
+	r.POST("/login", handlers.PostLoginHandler)
+	r.GET("/logout", handlers.LogoutHandler)
+	r.GET("/:sessionId/logout", handlers.LogoutHandler)
+	r.GET("/:sessionId/admin", handlers.AuthMiddleware, handlers.AdminHandler)
+	r.GET("/:sessionId/users", handlers.AuthMiddleware, handlers.GetUsersHandler)
+	r.POST("/:sessionId/users", handlers.AuthMiddleware, handlers.PostUsersHandler)
+	r.GET("/:sessionId/participants", handlers.AuthMiddleware, handlers.GetParticipantsHandler)
+	r.POST("/:sessionId/participants", handlers.AuthMiddleware, handlers.PostParticipantsHandler)
+	r.GET("/:sessionId/stats", handlers.AuthMiddleware, handlers.GetStatsHandler)
+	r.POST("/:sessionId/stats", handlers.AuthMiddleware, handlers.PostStatsHandler)
 }

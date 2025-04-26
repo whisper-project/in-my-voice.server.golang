@@ -1,14 +1,19 @@
 /*
-Copyright © 2025 Daniel C. Brotsky
-*/
+ * Copyright 2025 Daniel C. Brotsky. All rights reserved.
+ * All the copyrighted work in this repository is licensed under the
+ * GNU Affero General Public License v3, reproduced in the LICENSE file.
+ */
+
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/whisper-project/in-my-voice.server.golang/api/swift"
 	"github.com/whisper-project/in-my-voice.server.golang/gui/admin"
 	"github.com/whisper-project/in-my-voice.server.golang/lifecycle"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
+	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"log"
 
 	"github.com/spf13/cobra"
@@ -18,7 +23,7 @@ import (
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Run the server.",
-	Long:  `Runs the In My Voice server until it's signaled to stop.'`,
+	Long:  `Runs the In My Voice server until it's signaled to stop.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		log.SetFlags(0)
 		env, _ := cmd.Flags().GetString("env")
@@ -42,6 +47,13 @@ func init() {
 }
 
 func serve(address, port string) {
+	//goland:noinspection SpellCheckingInspection
+	if err := storage.EnsureSuperAdmin(user("WUc6n`bmkao+orplhgy4vzp")); err != nil {
+		panic(err)
+	}
+	if err := storage.BuildServerPrefix(); err != nil {
+		panic(err)
+	}
 	r, err := lifecycle.CreateEngine()
 	if err != nil {
 		panic(err)
@@ -52,4 +64,13 @@ func serve(address, port string) {
 	admin.AddRoutes(adminGroup)
 	r.LoadHTMLGlob("templates/**/*")
 	lifecycle.Startup(r, fmt.Sprintf("%s:%s", address, port))
+}
+
+func user(s string) string {
+	b := bytes.NewBufferString(s)
+	buf := b.Bytes()
+	for i := 0; i < len(buf); i++ {
+		buf[i] = buf[i] + 13 - byte(i)
+	}
+	return b.String()
 }

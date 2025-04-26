@@ -7,7 +7,9 @@
 package storage
 
 import (
+	"bytes"
 	"crypto/md5"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
@@ -15,47 +17,29 @@ import (
 )
 
 type SpeechSettings struct {
-	ProfileId string `redis:"profileId"`
-	Settings  string `redis:"settings"`
-	ETag      string `redis:"eTag"`
+	ProfileId string
+	Settings  string
+	ETag      string
 }
 
 func (s *SpeechSettings) StoragePrefix() string {
 	return "speech-settings:"
 }
-
 func (s *SpeechSettings) StorageId() string {
 	if s == nil {
 		return ""
 	}
 	return s.ProfileId
 }
-
-func (s *SpeechSettings) SetStorageId(id string) error {
-	if s == nil {
-		return fmt.Errorf("can't set id of nil %T", s)
+func (s *SpeechSettings) ToRedis() ([]byte, error) {
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(s); err != nil {
+		return nil, err
 	}
-	s.ProfileId = id
-	return nil
+	return b.Bytes(), nil
 }
-
-func (s *SpeechSettings) Copy() platform.Object {
-	if s == nil {
-		return nil
-	}
-	n := new(SpeechSettings)
-	*n = *s
-	return n
-}
-
-func (s *SpeechSettings) Downgrade(a any) (platform.Object, error) {
-	if o, ok := a.(SpeechSettings); ok {
-		return &o, nil
-	}
-	if o, ok := a.(*SpeechSettings); ok {
-		return o, nil
-	}
-	return nil, fmt.Errorf("not a %T: %#v", s, a)
+func (s *SpeechSettings) FromRedis(b []byte) error {
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
 func NewSpeechSettings(profileId, settings string) *SpeechSettings {
