@@ -17,6 +17,14 @@ import (
 	"time"
 )
 
+var AdminTZ = func() *time.Location {
+	if loc, err := time.LoadLocation("America/Chicago"); err != nil {
+		panic(err)
+	} else {
+		return loc
+	}
+}()
+
 type AdminRole = string
 
 const (
@@ -59,6 +67,7 @@ func (u *AdminUser) ToRedis() ([]byte, error) {
 }
 
 func (u *AdminUser) FromRedis(data []byte) error {
+	*u = AdminUser{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(data)).Decode(u)
 }
 

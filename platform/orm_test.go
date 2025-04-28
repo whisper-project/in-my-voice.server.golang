@@ -361,6 +361,7 @@ func (data *OrmTestStruct) ToRedis() ([]byte, error) {
 }
 
 func (data *OrmTestStruct) FromRedis(b []byte) error {
+	*data = OrmTestStruct{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(data)
 }
 
@@ -411,34 +412,46 @@ func TestSaveLoadDeleteOrmTester(t *testing.T) {
 
 func TestSaveMapDeleteOrmTester(t *testing.T) {
 	ctx := context.Background()
-	id := uuid.New().String()
-	now := time.Now()
-	millis := now.UnixMilli()
-	seconds := float64(now.UnixMicro()) / 1_000_000
-	saved := OrmTestStruct{IdField: id, CreateDate: now, CreateDateMillis: millis, CreateDateSeconds: seconds, Secret: id}
-	if err := SaveObject(ctx, &saved); err != nil {
-		t.Errorf("Failed to save stored data for %q: %v", id, err)
+	id1 := uuid.New().String() + "-id1"
+	id2 := uuid.New().String() + "-id2"
+	saved1 := OrmTestStruct{IdField: id1, CreateDateMillis: 1000}
+	if err := SaveObject(ctx, &saved1); err != nil {
+		t.Errorf("Failed to save stored data for %q: %v", id1, err)
+	}
+	saved2 := OrmTestStruct{IdField: id2, Secret: "secret2"}
+	if err := SaveObject(ctx, &saved2); err != nil {
+		t.Errorf("Failed to save stored data for %q: %v", id2, err)
 	}
 	count := 0
-	found := false
+	found1 := false
+	found2 := false
 	loaded := OrmTestStruct{}
 	mapper := func() {
 		count++
-		if loaded.Secret == id {
-			found = true
+		if loaded.IdField == id1 && loaded.CreateDateMillis == 1000 {
+			found1 = true
+			if loaded.Secret != "" {
+				t.Errorf("Loaded data for %q has secret %q, expected %q", id1, loaded.Secret, "")
+			}
+		}
+		if loaded.IdField == id2 && loaded.Secret == "secret2" {
+			found2 = true
+			if loaded.CreateDateMillis != 0 {
+				t.Errorf("Loaded data for %q has millis %d, expected %v", id1, loaded.CreateDateMillis, 0)
+			}
 		}
 		if err := DeleteStorage(ctx, &loaded); err != nil {
-			t.Errorf("Failed to delete stored data for %q: %v", id, err)
+			t.Errorf("Failed to delete stored data for %q: %v", loaded.IdField, err)
 		}
 	}
 	if err := MapObjects(ctx, mapper, &loaded); err != nil {
 		t.Fatalf("Failed to map stored data in pass 1: %v", err)
 	}
-	if count != 1 {
-		t.Logf("Mapped over %#v OrmTester objects; expected %#v", count, 1)
+	if count < 2 {
+		t.Logf("Mapped over %#v OrmTester objects; expected at least 2", count)
 	}
-	if !found {
-		t.Errorf("Mapped over %#v objects; never found one with secret %q", count, id)
+	if !found1 || !found2 {
+		t.Errorf("Mapped over %#v objects; found1 = %v; found2 = %v", count, found1, found2)
 	}
 	count = 0
 	if err := MapObjects(ctx, mapper, &loaded); err != nil {

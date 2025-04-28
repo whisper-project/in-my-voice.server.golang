@@ -111,6 +111,7 @@ func (s *SpeechMonitor) ToRedis() ([]byte, error) {
 	return b.Bytes(), nil
 }
 func (s *SpeechMonitor) FromRedis(b []byte) error {
+	*s = SpeechMonitor{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 

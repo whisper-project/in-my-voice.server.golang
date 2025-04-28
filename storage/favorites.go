@@ -39,6 +39,7 @@ func (f *FavoritesSettings) ToRedis() ([]byte, error) {
 	return b.Bytes(), nil
 }
 func (f *FavoritesSettings) FromRedis(b []byte) error {
+	*f = FavoritesSettings{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(f)
 }
 

@@ -45,6 +45,7 @@ func (l *LifecycleData) ToRedis() ([]byte, error) {
 	return b.Bytes(), nil
 }
 func (l *LifecycleData) FromRedis(b []byte) error {
+	*l = LifecycleData{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(l)
 }
 

@@ -39,6 +39,7 @@ func (s *SpeechSettings) ToRedis() ([]byte, error) {
 	return b.Bytes(), nil
 }
 func (s *SpeechSettings) FromRedis(b []byte) error {
+	*s = SpeechSettings{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
