@@ -29,7 +29,7 @@ The API key must be specified and be a valid ElevenLabs API key.`,
 		env, _ := cmd.Flags().GetString("env")
 		apiKey, _ := cmd.Flags().GetString("key")
 		if ok, err := services.ElevenValidateApiKey(apiKey); err != nil {
-			log.Fatalf("Failed to validate API key: %v", err)
+			log.Fatalf("Failed to validate ElevenLabs API key: %v", err)
 		} else if !ok {
 			log.Fatalf("Not a valid ElevenLabs API key: %s", apiKey)
 		}
@@ -63,13 +63,27 @@ func createParticipant(apiKey, voiceId string) {
 	if id == "" {
 		id, name = pickVoice(apiKey)
 	}
-	if err := storage.AddStudyParticipant(upn, apiKey, id); err != nil {
-		log.Fatalf("Can't add participant %s: %v", upn, err)
+	p, err := storage.CreateStudyParticipant(upn)
+	if err != nil {
+		log.Fatalf("Can't create participant %s: %v", upn, err)
+	}
+	if err = p.UpdateAssignment("auto-created"); err != nil {
+		log.Fatalf("Can't auto-assign created participant %s: %v", upn, err)
+	}
+	if ok, err := p.UpdateApiKey(apiKey); err != nil {
+		log.Fatalf("Can't assign API key to participant %s: %v", upn, err)
+	} else if !ok {
+		log.Fatalf("Invalid API key for participant %s: %s", upn, apiKey)
+	}
+	if ok, err := p.UpdateVoiceId(id); err != nil {
+		log.Fatalf("Can't assign voice ID to participant %s: %v", upn, err)
+	} else if !ok {
+		log.Fatalf("Invalid voice ID for participant %s: %s", upn, id)
 	}
 	if name != "" {
-		log.Printf("Added participant %q with voice %s", upn, name)
+		log.Printf("Created participant %q with voice %s", upn, name)
 	} else {
-		log.Printf("Added participant %q", upn)
+		log.Printf("Created participant %q", upn)
 	}
 }
 

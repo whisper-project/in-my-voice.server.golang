@@ -60,7 +60,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 	if apiKey == "" {
 		// user wants to delete their voice settings, oblige them
 		if err := storage.DeleteSpeechSettings(profileId); err != nil {
-			c.JSON(500, gin.H{"status": "error", "error": "database failure"})
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 			return
 		}
 		defer func() {
@@ -68,7 +68,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 			_ = storage.RemoveMonitor(profileId)
 		}()
 		c.Header("X-Speech-Settings-Update", "true")
-		c.Status(204)
+		c.Status(http.StatusNoContent)
 		return
 	}
 	if ok, err := services.ElevenValidateApiKey(apiKey); err != nil {

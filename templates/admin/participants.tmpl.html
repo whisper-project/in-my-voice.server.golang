@@ -19,8 +19,11 @@
 <table>
     <thead>
         <tr>
-            <th>Email</th>
-            <th>Roles</th>
+            <th>UPN</th>
+            <th>Assigned Date (Memo)</th>
+            <th>Configured?</th>
+            <th>Start Date</th>
+            <th>End Date</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -28,65 +31,79 @@
     {{ range .Participants }}
         <tr>
             <td>{{ .UPN }}</td>
-            <td>{{ .Enrolled }}</td>
+            <td>{{ .Assigned }}</td>
+            <td>{{ .Configured }}</td>
+            <td>{{ .Started }}</td>
+            <td>{{ .Finished }}</td>
+            <td><a href="?edit={{ .UPN }}">Edit</a></td>
         </tr>
     {{ end }}
     </tbody>
 </table>
 {{ else }}
-<p>No users.</p>
+<p>No study participants.</p>
 {{ end }}
 {{ if .Edit }}
-    <form method="POST">
-        <h3>Edit User</h3>
-        <input type="hidden" name="id" value="{{ .Edit.Id }}" />
+    <form action="./participants" method="POST">
+        <h3>Edit Participant Info</h3>
+        <input type="hidden" name="op" value="edit" />
+        <input type="hidden" name="upn" value="{{ .Edit.UPN }}" />
         <div>
-            <label for="email">Email:</label>
-            <input type="text" id="email" name="email" size="50" value="{{ .Edit.Email }}" required />
+            <label for="display">UPN:</label>
+            <input type="text" id="display" size="50" value="{{ .Edit.UPN }}" disabled />
         </div>
+        <div>
+            <label for="memo">Assignment:</label>
+            <input type="text" id="memo" name="memo" size="50" value="{{ .Edit.Memo }}" required />
+        </div>
+        {{ if .Edit.Assigned }}
+        <div>
+            <label for="assigned">Assigned at:</label>
+            <input type="text" id="assigned" name="assigned" size="30" value="{{ .Edit.Assigned }}" disabled />
+        </div>
+        {{ end }}
+        {{ if .Edit.Started }}
+        <div>
+            <label for="started">Enrolled in study at:</label>
+            <input type="text" id="started" name="started" size="30" value="{{ .Edit.Started }}" disabled />
+        </div>
+        {{ end }}
+        {{ if .Edit.Finished }}
+        <div>
+            <label for="finished">Disenrolled from study at:</label>
+            <input type="text" id="finished" name="finished" size="30" value="{{ .Edit.Finished }}" disabled />
+        </div>
+        {{ end }}
         <fieldset>
-            <legend>Roles:</legend>
+            <legend>ElevenLabs Settings:</legend>
             <div>
-                <input type="checkbox" id="researcher" name="researcher" {{ if .Edit.researcher }}checked{{ end }} />
-                <label for="researcher">Researcher</label>
+                <label for="key">API Key:</label>
+                <input type="text" id="key" name="key" size="60" value="{{ .Edit.Key }}"
+                    {{ if .Edit.Finished }} disabled {{ end }}/>
             </div>
             <div>
-                <input type="checkbox" id="participant" name="participant" {{ if .Edit.participant }}checked{{ end }} />
-                <label for="participant">Participant Manager</label>
-            </div>
-            <div>
-                <input type="checkbox" id="user" name="user" {{ if .Edit.user }}checked{{ end }} />
-                <label for="user">User Manager</label>
+                <label for="voice">Voice ID:</label>
+                <input type="text" id="voice" name="voice" size="60" value="{{ .Edit.Voice }}"
+                        {{ if .Edit.Finished }} disabled {{ end }}/>
             </div>
         </fieldset>
         <button type="submit">Save Changes</button>
-        <button type="button" onclick="window.location.href='./users'">Cancel</button>
+        <button type="button" onclick="window.location.href='./participants'">Cancel</button>
     </form>
 {{ else }}
-    <form action="./users" method="POST">
-        <h3>Add User</h3>
-        <input type="hidden" name="id" value="" />
+    <form action="./participants" method="POST">
+        <h3>Add UPN</h3>
+        <input type="hidden" name="op" value="add" />
         <div>
-            <label for="email">Email:</label>
-            <input type="text" id="email" name="email" size="50" value="" required />
+            <label for="upn">UPN:</label>
+            <input type="text" id="upn" name="upn" size="50" required />
         </div>
-        <fieldset>
-            <legend>Roles (at least one must be checked):</legend>
-            <div>
-                <input type="checkbox" id="researcher" name="researcher" />
-                <label for="researcher">Researcher</label>
-            </div>
-            <div>
-                <input type="checkbox" id="participant" name="participant" />
-                <label for="participant">Participant Manager</label>
-            </div>
-            <div>
-                <input type="checkbox" id="user" name="user" />
-                <label for="user">User Manager</label>
-            </div>
-        </fieldset>
-        <button type="submit">Add User</button>
-        <button type="button" onclick="window.location.href='./users'">Cancel</button>
+        <div>
+            <label for="memo">Assignment (optional):</label>
+            <input type="text" id="memo" name="memo" size="30" />
+        </div>
+        <button type="submit">Add UPN</button>
+        <button type="button" onclick="window.location.href='./participants'">Cancel</button>
     </form>
 {{ end }}
 {{ template "admin/footer.tmpl.html" }}

@@ -7,6 +7,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
@@ -16,6 +17,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 var emailPattern = regexp.MustCompile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
@@ -253,6 +255,40 @@ func GetParticipantsHandler(c *gin.Context) {
 		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
 		return
 	}
+	participants, err := storage.GetAllStudyParticipants()
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	slices.SortFunc(participants, CompareParticipantsFunc(c.Query("sort")))
+	message := c.Query("msg")
+	editId := c.Query("edit")
+	var pEdit map[string]string
+	pList := make([]map[string]string, 0, len(participants))
+	for _, p := range participants {
+		if editId == p.Upn {
+			editId = ""
+			pEdit = map[string]string{"UPN": p.Upn}
+			pEdit["Memo"] = p.Memo
+			if p.Assigned > 0 {
+				pEdit["Assigned"] = FormatParticipantDateTime(p.Assigned)
+			}
+			pEdit["Key"] = p.ApiKey
+			pEdit["Voice"] = p.VoiceId
+			if p.Started > 0 {
+				pEdit["Started"] = FormatParticipantDateTime(p.Started)
+			}
+			if p.Finished > 0 {
+				pEdit["Finished"] = FormatParticipantDateTime(p.Finished)
+			}
+		}
+		pList = append(pList, MakeParticipantMap(p))
+	}
+	if editId != "" {
+		c.Redirect(http.StatusSeeOther, "./participants")
+		return
+	}
+	c.HTML(http.StatusOK, "admin/participants.tmpl.html", gin.H{"Participants": pList, "Edit": pEdit, "Message": message})
 }
 
 func PostParticipantsHandler(c *gin.Context) {
@@ -262,6 +298,90 @@ func PostParticipantsHandler(c *gin.Context) {
 		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
 		return
 	}
+	op := c.PostForm("op")
+	upn := c.PostForm("upn")
+	memo := strings.TrimSpace(c.PostForm("memo"))
+	if op == "add" {
+		p, err := storage.CreateStudyParticipant(upn)
+		if err != nil {
+			if errors.Is(err, storage.ParticipantAlreadyExistsError) {
+				msg := url.QueryEscape(fmt.Sprintf("A participant with UPN %s already exists.", p))
+				target := "./participants?msg=" + msg
+				c.Redirect(http.StatusSeeOther, target)
+				return
+			}
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
+		}
+		if memo != "" {
+			if err = p.UpdateAssignment(memo); err != nil {
+				c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+				return
+			}
+		}
+		msg := url.QueryEscape("UPN added successfully.")
+		if memo != "" {
+			msg = url.QueryEscape("UPN added and assigned successfully.")
+		}
+		target := "./participants?msg=" + msg
+		c.Redirect(http.StatusSeeOther, target)
+		return
+	}
+	// op == edit
+	p, err := storage.GetStudyParticipant(upn)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	if p == nil {
+		msg := url.QueryEscape("Participant not found.")
+		target := "./participants?msg=" + msg
+		c.Redirect(http.StatusSeeOther, target)
+		return
+	}
+	if memo != p.Memo {
+		if memo == "" {
+			msg := "Assignment memo cannot be blank."
+			target := "./participants?edit=" + upn + "&msg=" + msg
+			c.Redirect(http.StatusSeeOther, target)
+			return
+		}
+		if err = p.UpdateAssignment(memo); err != nil {
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
+		}
+	}
+	if key := c.PostForm("key"); key != "" && key != p.ApiKey {
+		if ok, err := p.UpdateApiKey(key); err != nil {
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
+		} else if !ok {
+			msg := url.QueryEscape("Invalid API key.")
+			target := "./participants?edit=" + upn + "&msg=" + msg
+			c.Redirect(http.StatusSeeOther, target)
+			return
+		}
+	}
+	if voice := c.PostForm("voice"); voice != "" && voice != p.VoiceId {
+		if p.ApiKey == "" {
+			msg := url.QueryEscape("Can't set voice ID without an API key.")
+			target := "./participants?edit=" + upn + "&msg=" + msg
+			c.Redirect(http.StatusSeeOther, target)
+			return
+		}
+		if ok, err := p.UpdateVoiceId(voice); err != nil {
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
+		} else if !ok {
+			msg := url.QueryEscape("Invalid voice ID.")
+			target := "./participants?edit=" + upn + "&msg=" + msg
+			c.Redirect(http.StatusSeeOther, target)
+			return
+		}
+	}
+	msg := url.QueryEscape("Participant info updated successfully.")
+	target := "./participants?msg=" + msg
+	c.Redirect(http.StatusSeeOther, target)
 }
 
 func GetStatsHandler(c *gin.Context) {
@@ -296,4 +416,64 @@ func getAuthenticatedUser(c *gin.Context) *storage.AdminUser {
 
 func setAuthenticatedUser(c *gin.Context, user *storage.AdminUser) {
 	c.Set("authenticatedUser", user)
+}
+
+func CompareParticipantsFunc(sort string) func(a, b *storage.StudyParticipant) int {
+	return func(a, b *storage.StudyParticipant) int {
+		upnCompare := strings.Compare(a.Upn, b.Upn)
+		timeCompare := func(t1, t2 int64) int {
+			if t1 == t2 {
+				return upnCompare
+			} else if t1 < t2 {
+				return -1
+			} else {
+				return 1
+			}
+		}
+		switch sort {
+		case "assigned":
+			return timeCompare(a.Assigned, b.Assigned)
+		case "start":
+			return timeCompare(a.Started, b.Started)
+		case "end":
+			return timeCompare(a.Finished, b.Finished)
+		default:
+			return upnCompare
+		}
+	}
+}
+
+func MakeParticipantMap(p *storage.StudyParticipant) map[string]string {
+	pMap := map[string]string{"UPN": p.Upn}
+	if p.Assigned > 0 {
+		memo := p.Memo
+		if len(memo) > 20 {
+			memo = memo[:17] + "..."
+		}
+		pMap["Assigned"] = FormatParticipantDate(p.Assigned) + " (" + memo + ")"
+		if p.ApiKey != "" {
+			if p.VoiceId != "" {
+				pMap["Configured"] = "Yes"
+			} else {
+				pMap["Configured"] = "API Key Only"
+			}
+		} else {
+			pMap["Configured"] = "No"
+		}
+	}
+	if p.Started > 0 {
+		pMap["Started"] = FormatParticipantDate(p.Started)
+	}
+	if p.Finished > 0 {
+		pMap["Finished"] = FormatParticipantDate(p.Finished)
+	}
+	return pMap
+}
+
+func FormatParticipantDate(t int64) string {
+	return time.UnixMilli(t).In(storage.AdminTZ).Format("01/02/2006")
+}
+
+func FormatParticipantDateTime(t int64) string {
+	return time.UnixMilli(t).In(storage.AdminTZ).Format("01/02/2006 3:04pm MST")
 }
