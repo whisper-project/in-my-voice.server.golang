@@ -43,7 +43,7 @@ func LaunchHandler(c *gin.Context) {
 		return
 	}
 	c.Header("X-Study-Membership-Update", strconv.FormatBool(isEnrolled != ""))
-	c.Header("X-Non-Study-Collect-Stats-Update", strconv.FormatBool(storage.CollectNonStudyStats))
+	c.Header("X-Non-Study-Collect-Stats-Update", strconv.FormatBool(storage.GetStudyPolicies().CollectNonStudyStats))
 	// make sure any other update annotation has been removed,
 	// because clients update everything at launch
 	c.Header("X-Speech-Settings-Update", "")

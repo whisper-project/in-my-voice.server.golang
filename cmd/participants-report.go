@@ -18,8 +18,7 @@ import (
 	"text/template"
 )
 
-// reportCmd represents the report command
-var reportCmd = &cobra.Command{
+var participantsReportCmd = &cobra.Command{
 	Use:   "report",
 	Short: "Report on study participants",
 	Long: `Provides a report on all study participants.
@@ -38,7 +37,7 @@ those assigned to a profile, and those who have left the study.`,
 }
 
 func init() {
-	participantsCmd.AddCommand(reportCmd)
+	participantsCmd.AddCommand(participantsReportCmd)
 	participantsCmd.Args = cobra.NoArgs
 	participantsCmd.Flags().StringP("env", "e", "development", "The environment to run in")
 }

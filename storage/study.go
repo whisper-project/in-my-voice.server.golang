@@ -20,16 +20,67 @@ import (
 	"time"
 )
 
+type StudyPolicies struct {
+	CollectNonStudyStats        bool
+	AnonymizeNonStudyLineStats  bool
+	SeparateNonStudyRepeatStats bool
+}
+
+func (s *StudyPolicies) StoragePrefix() string {
+	return "study-policies"
+}
+func (s *StudyPolicies) StorageId() string {
+	return "study-policies"
+}
+func (s *StudyPolicies) ToRedis() ([]byte, error) {
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(s); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+func (s *StudyPolicies) FromRedis(b []byte) error {
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
+}
+
 var (
-	CollectNonStudyStats        = true
-	AnonymizeNonStudyLineStats  = true
-	SeparateNonStudyRepeatStats = true
+	DefaultStudyPolicies = StudyPolicies{true, true, true}
+	currentStudyPolicies = DefaultStudyPolicies
 )
 
-func SetNonStudyStatsPolicy(collect, anonymizeLines, separateRepeats bool) {
-	CollectNonStudyStats = collect
-	AnonymizeNonStudyLineStats = anonymizeLines
-	SeparateNonStudyRepeatStats = separateRepeats
+func loadPoliciesConfigAction() {
+	var s StudyPolicies
+	err := platform.LoadObject(sCtx(), &s)
+	if err == nil {
+		currentStudyPolicies = s
+		return
+	}
+	// presumably they've never been set, so use the defaults
+	if !errors.Is(err, platform.NotFoundError) {
+		// warn if we really had a database failure
+		sLog().Error("db failure on study policies load", zap.Error(err))
+	}
+	currentStudyPolicies = DefaultStudyPolicies
+	if err = platform.SaveObject(sCtx(), &currentStudyPolicies); err != nil {
+		// warn on database failure
+		sLog().Error("db failure on study policies save", zap.Error(err))
+	}
+}
+
+func init() {
+	platform.RegisterForConfigChange("study-policies", loadPoliciesConfigAction)
+}
+
+func GetStudyPolicies() StudyPolicies {
+	p := currentStudyPolicies
+	return p
+}
+
+func SetStudyPolicies(p StudyPolicies) {
+	currentStudyPolicies = p
+	if err := platform.SaveObject(sCtx(), &currentStudyPolicies); err != nil {
+		sLog().Error("db failure on study policies save", zap.Error(err))
+	}
 }
 
 type StudyParticipant struct {
@@ -367,7 +418,7 @@ func GetOrCreateCannedLineStat(text string, inStudy bool) (*CannedLineStat, erro
 	hasher := fnv.New64a()
 	_, _ = hasher.Write([]byte(text))
 	hash := strconv.FormatUint(hasher.Sum64(), 32)
-	if SeparateNonStudyRepeatStats && !inStudy {
+	if currentStudyPolicies.SeparateNonStudyRepeatStats && !inStudy {
 		hash = "NS:" + hash
 	}
 	c := &CannedLineStat{Hash: hash}

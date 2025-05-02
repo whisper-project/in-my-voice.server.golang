@@ -16,10 +16,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// createCmd represents the create command
-var createCmd = &cobra.Command{
+var participantsCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create dummy study participants.",
+	Short: "Create study participants.",
 	Long: `Creates study participants with template data.
 They have templated names and, if you don't specify a voice ID to use,
 each will use one picked at random from the API key's list of voices.
@@ -47,13 +46,13 @@ The API key must be specified and be a valid ElevenLabs API key.`,
 }
 
 func init() {
-	participantsCmd.AddCommand(createCmd)
-	createCmd.Args = cobra.NoArgs
-	createCmd.Flags().StringP("env", "e", "development", "The environment to run in")
-	createCmd.Flags().IntP("count", "c", 1, "The number of participants to create")
-	createCmd.Flags().StringP("key", "k", "", "The API key for the created participants")
-	createCmd.Flags().StringP("port", "p", "", "The voice ID for the created participants")
-	createCmd.MarkFlagsOneRequired("key")
+	participantsCmd.AddCommand(participantsCreateCmd)
+	participantsCreateCmd.Args = cobra.NoArgs
+	participantsCreateCmd.Flags().StringP("env", "e", "development", "The environment to run in")
+	participantsCreateCmd.Flags().IntP("count", "c", 1, "The number of participants to create")
+	participantsCreateCmd.Flags().StringP("key", "k", "", "The API key for the created participants")
+	participantsCreateCmd.Flags().StringP("port", "p", "", "The voice ID for the created participants")
+	participantsCreateCmd.MarkFlagsOneRequired("key")
 }
 
 func createParticipant(apiKey, voiceId string) {
@@ -87,9 +86,10 @@ func createParticipant(apiKey, voiceId string) {
 	}
 }
 
+//goland:noinspection SpellCheckingInspection
 const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 
-var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func templateName() string {
 	b := make([]byte, 17)

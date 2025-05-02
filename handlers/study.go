@@ -106,7 +106,7 @@ func LineDataHandler(c *gin.Context) {
 	}
 	inStudy := true
 	if upn == "" {
-		if !storage.CollectNonStudyStats {
+		if !storage.GetStudyPolicies().CollectNonStudyStats {
 			middleware.CtxLog(c).Info("Refusing line data for non-study profile.",
 				zap.String("profileId", profileId))
 			c.Header("X-Non-Study-Collect-Stats-Update", "false")
@@ -114,7 +114,7 @@ func LineDataHandler(c *gin.Context) {
 			return
 		}
 		inStudy = false
-		if storage.AnonymizeNonStudyLineStats {
+		if storage.GetStudyPolicies().AnonymizeNonStudyLineStats {
 			upn = "NS:anonymous"
 		} else {
 			upn = "NS:" + profileId

@@ -42,9 +42,27 @@ var (
 		DbUrl:          "redis://",
 		DbKeyPrefix:    "c:",
 	}
-	loadedConfig = ciConfig
-	configStack  []Environment
+	loadedConfig        = ciConfig
+	configStack         []Environment
+	configChangeActions = make(map[string]func())
 )
+
+func RegisterForConfigChange(name string, action func()) {
+	if _, ok := configChangeActions[name]; ok {
+		panic(`Duplicate action registration for "` + name + `"`)
+	}
+	configChangeActions[name] = action
+}
+
+func UnregisterForConfigChange(name string) {
+	delete(configChangeActions, name)
+}
+
+func runConfigChangeActions() {
+	for _, action := range configChangeActions {
+		action()
+	}
+}
 
 func GetConfig() Environment {
 	return loadedConfig
@@ -75,11 +93,13 @@ func PushConfig(name string) error {
 func PushAlteredConfig(env Environment) {
 	configStack = append(configStack, loadedConfig)
 	loadedConfig = env
+	runConfigChangeActions()
 }
 
 func pushCiConfig() error {
 	configStack = append(configStack, loadedConfig)
 	loadedConfig = ciConfig
+	runConfigChangeActions()
 	return nil
 }
 
@@ -110,10 +130,10 @@ func pushEnvConfig(filename string) error {
 		return fmt.Errorf("error loading .env vars: %v", err)
 	}
 	configStack = append(configStack, loadedConfig)
-	getEnvInt := func(s string) int {
+	getEnvPort := func(s string, d int) int {
 		val, _ := strconv.Atoi(s)
 		if val <= 0 {
-			return 25
+			return d
 		} else {
 			return val
 		}
@@ -122,14 +142,15 @@ func pushEnvConfig(filename string) error {
 		Name:           os.Getenv("ENVIRONMENT_NAME"),
 		HttpScheme:     os.Getenv("HTTP_SCHEME"),
 		HttpHost:       os.Getenv("HTTP_HOST"),
-		HttpPort:       getEnvInt(os.Getenv("HTTP_PORT")),
+		HttpPort:       getEnvPort(os.Getenv("HTTP_PORT"), 80),
 		SmtpHost:       os.Getenv("SMTP_HOST"),
-		SmtpPort:       getEnvInt(os.Getenv("SMTP_PORT")),
+		SmtpPort:       getEnvPort(os.Getenv("SMTP_PORT"), 25),
 		SmtpCredSecret: os.Getenv("SMTP_CRED_SECRET"),
 		SmtpCredId:     os.Getenv("SMTP_CRED_ID"),
 		DbUrl:          os.Getenv("REDIS_URL"),
 		DbKeyPrefix:    os.Getenv("DB_KEY_PREFIX"),
 	}
+	runConfigChangeActions()
 	return nil
 }
 
@@ -139,6 +160,7 @@ func PopConfig() {
 	}
 	loadedConfig = configStack[len(configStack)-1]
 	configStack = configStack[:len(configStack)-1]
+	runConfigChangeActions()
 	return
 }
 
