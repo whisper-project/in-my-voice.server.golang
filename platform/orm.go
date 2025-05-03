@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -351,7 +352,7 @@ func MapRemove[T RedisKey](ctx context.Context, obj T, k string) error {
 
 var NotFoundError = errors.New("not found")
 
-func loadValueAtKey[K RedisKey, V RedisValue](ctx context.Context, k K, v V) error {
+func LoadValueAtKey[K RedisKey, V RedisValue](ctx context.Context, k K, v V) error {
 	db, prefix := GetDb()
 	key := prefix + k.StoragePrefix() + k.StorageId()
 	bytes, err := db.Get(ctx, key).Bytes()
@@ -364,7 +365,7 @@ func loadValueAtKey[K RedisKey, V RedisValue](ctx context.Context, k K, v V) err
 	return v.FromRedis(bytes)
 }
 
-func saveValueAtKey[A RedisKey, S RedisValue](ctx context.Context, a A, s S) error {
+func SaveValueAtKey[A RedisKey, S RedisValue](ctx context.Context, a A, s S) error {
 	db, prefix := GetDb()
 	key := prefix + a.StoragePrefix() + a.StorageId()
 	bytes, err := s.ToRedis()
@@ -374,38 +375,54 @@ func saveValueAtKey[A RedisKey, S RedisValue](ctx context.Context, a A, s S) err
 	return db.Set(ctx, key, bytes, 0).Err()
 }
 
-type Object interface {
-	RedisKey
-	RedisValue
-}
-
-func LoadObject[T Object](ctx context.Context, obj T) error {
-	return loadValueAtKey(ctx, obj, obj)
-}
-
-func SaveObject[T Object](ctx context.Context, obj T) error {
-	return saveValueAtKey(ctx, obj, obj)
-}
-
-func MapObjects[T Object](ctx context.Context, f func(), obj T) error {
+func MapKeys[K RedisKey](ctx context.Context, f func(string) error, k K) error {
 	db, prefix := GetDb()
-	iter := db.Scan(ctx, 0, prefix+obj.StoragePrefix()+"*", 20).Iterator()
+	iter := db.Scan(ctx, 0, prefix+k.StoragePrefix()+"*", 20).Iterator()
+	for iter.Next(ctx) {
+		key := iter.Val()
+		id := strings.TrimPrefix(key, prefix+k.StoragePrefix())
+		if err := f(id); err != nil {
+			return fmt.Errorf("process key %s, id %s: %w", key, id, err)
+		}
+	}
+	return nil
+}
+
+func MapValuesAtKeys[K RedisKey, V RedisValue](ctx context.Context, f func() error, k K, v V) error {
+	db, prefix := GetDb()
+	iter := db.Scan(ctx, 0, prefix+k.StoragePrefix()+"*", 20).Iterator()
 	for iter.Next(ctx) {
 		key := iter.Val()
 		bytes, err := db.Get(ctx, key).Bytes()
 		if err != nil {
 			return fmt.Errorf("fetch key %s: %w", key, err)
 		}
-		err = obj.FromRedis(bytes)
+		err = v.FromRedis(bytes)
 		if err != nil {
 			return fmt.Errorf("unmarshal key %s: %w", key, err)
 		}
-		f()
-	}
-	if err := iter.Err(); err != nil {
-		return err
+		if err = f(); err != nil {
+			return fmt.Errorf("process key %s, value %v: %w", key, v, err)
+		}
 	}
 	return nil
+}
+
+type Object interface {
+	RedisKey
+	RedisValue
+}
+
+func LoadObject[T Object](ctx context.Context, obj T) error {
+	return LoadValueAtKey(ctx, obj, obj)
+}
+
+func SaveObject[T Object](ctx context.Context, obj T) error {
+	return SaveValueAtKey(ctx, obj, obj)
+}
+
+func MapObjects[T Object](ctx context.Context, f func() error, obj T) error {
+	return MapValuesAtKeys(ctx, f, obj, obj)
 }
 
 type StorableString string

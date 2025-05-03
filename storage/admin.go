@@ -138,9 +138,10 @@ func DeleteAdminUser(id string) error {
 func GetAllAdminUsers() ([]*AdminUser, error) {
 	u := &AdminUser{}
 	var result []*AdminUser
-	collect := func() {
+	collect := func() error {
 		n := *u
 		result = append(result, &n)
+		return nil
 	}
 	if err := platform.MapObjects(sCtx(), collect, u); err != nil {
 		sLog().Error("db failure on admin user map", zap.Error(err))

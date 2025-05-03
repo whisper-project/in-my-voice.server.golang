@@ -11,7 +11,9 @@ import (
 	"context"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
+	"slices"
 	"testing"
 	"time"
 
@@ -425,24 +427,25 @@ func TestSaveMapDeleteOrmTester(t *testing.T) {
 	count := 0
 	found1 := false
 	found2 := false
-	loaded := OrmTestStruct{}
-	mapper := func() {
+	loaded := OrmTestStruct{IdField: "doesn't matter"}
+	mapper := func() error {
 		count++
 		if loaded.IdField == id1 && loaded.CreateDateMillis == 1000 {
 			found1 = true
 			if loaded.Secret != "" {
-				t.Errorf("Loaded data for %q has secret %q, expected %q", id1, loaded.Secret, "")
+				return fmt.Errorf("Loaded data for %q has secret %q, expected %q", id1, loaded.Secret, "")
 			}
 		}
 		if loaded.IdField == id2 && loaded.Secret == "secret2" {
 			found2 = true
 			if loaded.CreateDateMillis != 0 {
-				t.Errorf("Loaded data for %q has millis %d, expected %v", id1, loaded.CreateDateMillis, 0)
+				return fmt.Errorf("Loaded data for %q has millis %d, expected %v", id1, loaded.CreateDateMillis, 0)
 			}
 		}
 		if err := DeleteStorage(ctx, &loaded); err != nil {
-			t.Errorf("Failed to delete stored data for %q: %v", loaded.IdField, err)
+			return fmt.Errorf("Failed to delete stored data for %q: %v", loaded.IdField, err)
 		}
+		return nil
 	}
 	if err := MapObjects(ctx, mapper, &loaded); err != nil {
 		t.Fatalf("Failed to map stored data in pass 1: %v", err)
@@ -459,5 +462,50 @@ func TestSaveMapDeleteOrmTester(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("Mapped over %#v objects; wanted %#v", count, 0)
+	}
+}
+
+type ormTestKey string
+
+func (o ormTestKey) StoragePrefix() string {
+	return "test-key-prefix:"
+}
+func (o ormTestKey) StorageId() string {
+	return string(o)
+}
+
+func TestMapKeys(t *testing.T) {
+	ctx := context.Background()
+	key1 := uuid.NewString()
+	if err := StoreString(ctx, ormTestKey(key1), "value1"); err != nil {
+		t.Fatal(err)
+	}
+	key2 := uuid.NewString()
+	if err := StoreString(ctx, ormTestKey(key2), "value2"); err != nil {
+		t.Fatal(err)
+	}
+	key3 := uuid.NewString()
+	if err := StoreString(ctx, ormTestKey(key3), "value3"); err != nil {
+		t.Fatal(err)
+	}
+	var foundKeys []string
+	mapper1 := func(k string) error {
+		foundKeys = append(foundKeys, k)
+		if err := DeleteStorage(ctx, ormTestKey(k)); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err := MapKeys(ctx, mapper1, ormTestKey("doesn't matter")); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(foundKeys, key1) && !slices.Contains(foundKeys, key2) && !slices.Contains(foundKeys, key3) {
+		t.Errorf("found keys %v; at least one is missing", foundKeys)
+	}
+	mapper2 := func(k string) error {
+		return fmt.Errorf("found key %q; expected none", k)
+	}
+	if err := MapKeys(ctx, mapper2, ormTestKey("")); err != nil {
+		t.Fatal(err)
 	}
 }

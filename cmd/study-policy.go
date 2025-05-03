@@ -23,6 +23,7 @@ Defaults are to collect from all users, to pool all data from users
 who are not participating in a study, and to segregate data collected from study
 participants about repeated phrases from similar data collected from other users.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		log.SetFlags(0)
 		env, _ := cmd.Flags().GetString("env")
 		if err := platform.PushConfig(env); err != nil {
 			log.Fatalf("Can't load %q configuration: %v", env, err)

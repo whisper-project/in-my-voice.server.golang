@@ -8,6 +8,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"errors"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
@@ -49,8 +50,9 @@ var (
 )
 
 func loadPoliciesConfigAction() {
+	ctx := context.Background()
 	var s StudyPolicies
-	err := platform.LoadObject(sCtx(), &s)
+	err := platform.LoadObject(ctx, &s)
 	if err == nil {
 		currentStudyPolicies = s
 		return
@@ -61,7 +63,7 @@ func loadPoliciesConfigAction() {
 		sLog().Error("db failure on study policies load", zap.Error(err))
 	}
 	currentStudyPolicies = DefaultStudyPolicies
-	if err = platform.SaveObject(sCtx(), &currentStudyPolicies); err != nil {
+	if err = platform.SaveObject(ctx, &currentStudyPolicies); err != nil {
 		// warn on database failure
 		sLog().Error("db failure on study policies save", zap.Error(err))
 	}
@@ -178,13 +180,14 @@ func GetStudyParticipant(upn string) (*StudyParticipant, error) {
 }
 
 func GetAllStudyParticipants() ([]*StudyParticipant, error) {
-	s := &StudyParticipant{}
+	var s StudyParticipant
 	var result []*StudyParticipant
-	collect := func() {
-		n := *s
+	collect := func() error {
+		n := s
 		result = append(result, &n)
+		return nil
 	}
-	if err := platform.MapObjects(sCtx(), collect, s); err != nil {
+	if err := platform.MapObjects(sCtx(), collect, &s); err != nil {
 		sLog().Error("db failure on participant map", zap.Error(err))
 		return nil, err
 	}
@@ -303,6 +306,8 @@ const (
 	PlatformBrowser
 )
 
+var PlatformNames = []string{"Unknown", "Phone", "Tablet", "Computer", "Browser"}
+
 // TypedLineStat records statistics for a single line typed by a study participant.
 //
 // If Changes and Duration are both zero, it means the line was a repeat, in which
@@ -342,32 +347,8 @@ func (t TypedLineStatList) StorageId() string {
 	return string(t)
 }
 
-func (t TypedLineStatList) FetchRange(start, end int64) ([]TypedLineStat, error) {
-	vals, err := platform.FetchRange(sCtx(), t, start, end)
-	if err != nil {
-		sLog().Error("db failure on typed line stat fetch range",
-			zap.String("studyId", string(t)), zap.Error(err))
-		return nil, err
-	}
-	var stat TypedLineStat
-	stats := make([]TypedLineStat, len(vals))
-	for i, v := range vals {
-		if err := stat.FromRedis([]byte(v)); err != nil {
-			sLog().Error("db failure on typed line stat decode",
-				zap.String("studyId", string(t)), zap.Int("index", i), zap.Error(err))
-			return nil, err
-		}
-		stats[i] = stat
-	}
-	return stats, nil
-}
-
-func (t TypedLineStatList) FetchAll() ([]TypedLineStat, error) {
-	return t.FetchRange(0, -1)
-}
-
 func (t TypedLineStatList) PushRange(stats []TypedLineStat) error {
-	vals := make([]string, len(stats))
+	vals := make([]string, 0, len(stats))
 	for _, s := range stats {
 		v, err := s.ToRedis()
 		if err != nil {
@@ -383,6 +364,47 @@ func (t TypedLineStatList) PushRange(stats []TypedLineStat) error {
 		return err
 	}
 	return nil
+}
+
+func FetchTypedLineStats(upn string, startDate, endDate int64) ([]TypedLineStat, error) {
+	vals, err := platform.FetchRange(sCtx(), TypedLineStatList(upn), 0, -1)
+	if err != nil {
+		return nil, err
+	}
+	var stat TypedLineStat
+	stats := make([]TypedLineStat, 0, len(vals))
+	for _, v := range vals {
+		if err := stat.FromRedis([]byte(v)); err != nil {
+			return nil, err
+		}
+		if stat.Completed < startDate || stat.Completed > endDate {
+			continue
+		}
+		stats = append(stats, stat)
+	}
+	return stats, nil
+}
+
+func FetchAllTypedLineStats(startDate, endDate int64, studyOnly bool) ([][]TypedLineStat, error) {
+	var results [][]TypedLineStat
+	mapper := func(upn string) error {
+		if studyOnly && strings.HasPrefix(upn, "NS:") {
+			return nil
+		}
+		result, err := FetchTypedLineStats(upn, startDate, endDate)
+		if err != nil {
+			return err
+		}
+		if len(result) == 0 {
+			return nil
+		}
+		results = append(results, result)
+		return nil
+	}
+	if err := platform.MapKeys(sCtx(), mapper, TypedLineStatList("")); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // CannedLineStat records the usage of pre-typed lines (favorites and repeats).
@@ -445,4 +467,20 @@ func SaveCannedLineStat(c *CannedLineStat) error {
 		return err
 	}
 	return nil
+}
+
+func FetchAllCannedLineStats(studyOnly bool) ([]CannedLineStat, error) {
+	var result []CannedLineStat
+	var s CannedLineStat
+	collect := func() error {
+		if studyOnly && strings.HasPrefix(s.Hash, "NS:") {
+			return nil
+		}
+		result = append(result, s)
+		return nil
+	}
+	if err := platform.MapObjects(sCtx(), collect, &s); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
