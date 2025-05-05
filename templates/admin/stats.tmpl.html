@@ -1,0 +1,97 @@
+{{ define "admin/stats.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InMyVoice Research Administration</title>
+</head>
+<body>
+<h2>InMyVoice - Research Administration</h2>
+<p style="color: red;">
+    {{ if .Message }}
+        {{ .Message }}
+    {{ else if .Recent }}
+        Your report is ready.
+        <a href="{{ .Recent.Href }}" download="{{ .Recent.Filename }}" target="_blank">Click here</a>
+        or in the list below to download it.
+    {{ end }}
+</p>
+<h3>Report List</h3>
+{{ if .Reports }}
+    <table>
+        <thead>
+        <tr>
+            <th><a href="./stats">Name</a></th>
+            <th><a href="./stats?sort=generated">Created</a></th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {{ range .Reports }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td>{{ .Generated }}</td>
+                <td>
+                    <a href="./download-report/{{ .Id }}" download="{{ .Filename }}" target="_blank">Download</a>
+                    <a href="?delete={{ .Id }}">Delete</a>
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+{{ else }}
+    <p>No reports.</p>
+{{ end }}
+<h3>New Typed Lines Report</h3>
+<form action="./stats" method="POST">
+    <input type="hidden" name="op" value="typed-lines" />
+    <div>
+        <label for="start">Start Date:</label>
+        <input type="date" id="start" name="start" />
+    </div>
+    <div>
+        <label for="end">End Date:</label>
+        <input type="date" id="end" name="end" size="20" />
+    </div>
+    <div>
+        <label for="upns">Restrict to UPNs:</label>
+        <select id="upns" name="upns" multiple>
+            {{ range .Upns }}
+                <option value="{{ . }}">{{ . }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div>
+        <label for="target">Report on:</label>
+        <select id="target" name="target">
+            <option value="study">Study Participants</option>
+            <option value="all">All Users</option>
+        </select>
+    </div>
+    <button type="submit">Report</button>
+    <button type="button" onclick="window.location.href='./stats'">Cancel</button>
+</form>
+<h3>New Repeated Phrases Report</h3>
+<form action="./stats" method="POST">
+    <input type="hidden" name="op" value="repeated-phrases" />
+    <div>
+        <label for="target">Report on:</label>
+        <select id="target" name="target">
+            <option value="study">Study Participants</option>
+            <option value="all">All Users</option>
+        </select>
+    </div>
+    <button type="submit">Report</button>
+    <button type="button" onclick="window.location.href='./stats'">Cancel</button>
+</form>
+{{ template "admin/footer.tmpl.html" }}
+</body>
+</html>
+{{ end }}

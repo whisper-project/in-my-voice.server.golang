@@ -12,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
+	"go.uber.org/zap"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -271,15 +273,15 @@ func GetParticipantsHandler(c *gin.Context) {
 			pEdit = map[string]string{"UPN": p.Upn}
 			pEdit["Memo"] = p.Memo
 			if p.Assigned > 0 {
-				pEdit["Assigned"] = FormatParticipantDateTime(p.Assigned)
+				pEdit["Assigned"] = formatDateTime(p.Assigned)
 			}
 			pEdit["Key"] = p.ApiKey
 			pEdit["Voice"] = p.VoiceId
 			if p.Started > 0 {
-				pEdit["Started"] = FormatParticipantDateTime(p.Started)
+				pEdit["Started"] = formatDateTime(p.Started)
 			}
 			if p.Finished > 0 {
-				pEdit["Finished"] = FormatParticipantDateTime(p.Finished)
+				pEdit["Finished"] = formatDateTime(p.Finished)
 			}
 		}
 		pList = append(pList, MakeParticipantMap(p))
@@ -305,7 +307,7 @@ func PostParticipantsHandler(c *gin.Context) {
 		p, err := storage.CreateStudyParticipant(upn)
 		if err != nil {
 			if errors.Is(err, storage.ParticipantAlreadyExistsError) {
-				msg := url.QueryEscape(fmt.Sprintf("A participant with UPN %s already exists.", p))
+				msg := url.QueryEscape(fmt.Sprintf("A participant with UPN %s already exists.", p.Upn))
 				target := "./participants?msg=" + msg
 				c.Redirect(http.StatusSeeOther, target)
 				return
@@ -391,6 +393,44 @@ func GetStatsHandler(c *gin.Context) {
 		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
 		return
 	}
+	message := c.Query("msg")
+	deleteId := c.Query("delete")
+	// create the list of existing reports
+	reports, err := storage.FetchAllStudyReports()
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	slices.SortFunc(reports, CompareReportsFunc(c.Query("sort")))
+	reportList := make([]map[string]string, 0, len(reports))
+	for _, r := range reports {
+		if r.Id == deleteId || r.Generated == 0 {
+			if err := r.Delete(); err != nil {
+				c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+				return
+			}
+			continue
+		}
+		reportList = append(reportList, map[string]string{
+			"Id":        r.Id,
+			"Name":      r.DisplayName(),
+			"Generated": formatDateTime(r.Generated),
+			"Filename":  r.Filename,
+		})
+	}
+	// create select for report generation
+	participants, err := storage.GetAllStudyParticipants()
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	slices.SortFunc(participants, CompareParticipantsFunc(""))
+	upns := make([]string, 0, len(participants))
+	for _, p := range participants {
+		upns = append(upns, p.Upn)
+	}
+	c.HTML(http.StatusOK, "admin/stats.tmpl.html",
+		gin.H{"Upns": upns, "Message": message, "Reports": reportList})
 }
 
 func PostStatsHandler(c *gin.Context) {
@@ -400,6 +440,69 @@ func PostStatsHandler(c *gin.Context) {
 		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
 		return
 	}
+	op := c.PostForm("op")
+	studyOnly := c.PostForm("target") == "study"
+	// create the report object
+	var r *storage.StudyReport
+	if op == "typed-lines" {
+		startString, endString := c.PostForm("start"), c.PostForm("end")
+		start, end, err := storage.ComputeReportDates(startString, endString, "2006-01-02")
+		if err != nil {
+			// shouldn't happen
+			sLog().Info("Invalid date in a posted report request",
+				zap.String("start", startString), zap.String("end", endString), zap.Error(err))
+			message := url.QueryEscape("Invalid start or end date.")
+			c.Redirect(http.StatusSeeOther, "./stats?msg="+message)
+			return
+		}
+		upns := c.PostFormArray("upns")
+		r = storage.NewStudyReport(storage.ReportTypeLines, start, end, studyOnly, upns)
+	} else if op == "repeated-phrases" {
+		r = storage.NewStudyReport(storage.ReportTypePhrases, 0, 0, studyOnly, nil)
+	} else {
+		// shouldn't happen
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	if err := r.GenerateAndStore(); err != nil {
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	msg := url.QueryEscape("Report generated successfully.")
+	c.Redirect(http.StatusSeeOther, "./stats?msg="+msg)
+}
+
+func DownloadReportHandler(c *gin.Context) {
+	u := getAuthenticatedUser(c)
+	if u == nil || !u.HasRole(storage.AdminRoleResearcher) {
+		// should never happen
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	report, err := storage.GetStudyReport(c.Param("reportId"))
+	if err != nil {
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	if report == nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	data, err := report.Retrieve()
+	if err != nil {
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	defer data.Close()
+	//goland:noinspection SpellCheckingInspection
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Status(http.StatusOK)
+	c.Stream(func(w io.Writer) bool {
+		if _, err := io.Copy(w, data); err != nil {
+			return true
+		}
+		return false
+	})
 }
 
 func getAuthenticatedUser(c *gin.Context) *storage.AdminUser {
@@ -443,6 +546,26 @@ func CompareParticipantsFunc(sort string) func(a, b *storage.StudyParticipant) i
 	}
 }
 
+func CompareReportsFunc(sort string) func(a, b *storage.StudyReport) int {
+	return func(a, b *storage.StudyReport) int {
+		timeCompare := func(t1, t2 int64) int {
+			if t1 == t2 {
+				return strings.Compare(a.Filename, b.Filename)
+			} else if t1 < t2 {
+				return -1
+			} else {
+				return 1
+			}
+		}
+		switch sort {
+		case "generated":
+			return timeCompare(a.Generated, b.Generated)
+		default:
+			return strings.Compare(a.Filename, b.Filename)
+		}
+	}
+}
+
 func MakeParticipantMap(p *storage.StudyParticipant) map[string]string {
 	pMap := map[string]string{"UPN": p.Upn}
 	if p.Assigned > 0 {
@@ -450,7 +573,7 @@ func MakeParticipantMap(p *storage.StudyParticipant) map[string]string {
 		if len(memo) > 20 {
 			memo = memo[:17] + "..."
 		}
-		pMap["Assigned"] = FormatParticipantDate(p.Assigned) + " (" + memo + ")"
+		pMap["Assigned"] = formatDate(p.Assigned) + " (" + memo + ")"
 		if p.ApiKey != "" {
 			if p.VoiceId != "" {
 				pMap["Configured"] = "Yes"
@@ -462,18 +585,18 @@ func MakeParticipantMap(p *storage.StudyParticipant) map[string]string {
 		}
 	}
 	if p.Started > 0 {
-		pMap["Started"] = FormatParticipantDate(p.Started)
+		pMap["Started"] = formatDate(p.Started)
 	}
 	if p.Finished > 0 {
-		pMap["Finished"] = FormatParticipantDate(p.Finished)
+		pMap["Finished"] = formatDate(p.Finished)
 	}
 	return pMap
 }
 
-func FormatParticipantDate(t int64) string {
+func formatDate(t int64) string {
 	return time.UnixMilli(t).In(storage.AdminTZ).Format("01/02/2006")
 }
 
-func FormatParticipantDateTime(t int64) string {
+func formatDateTime(t int64) string {
 	return time.UnixMilli(t).In(storage.AdminTZ).Format("01/02/2006 3:04pm MST")
 }

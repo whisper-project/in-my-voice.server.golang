@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"go.uber.org/zap"
@@ -385,26 +386,38 @@ func FetchTypedLineStats(upn string, startDate, endDate int64) ([]TypedLineStat,
 	return stats, nil
 }
 
-func FetchAllTypedLineStats(startDate, endDate int64, studyOnly bool) ([][]TypedLineStat, error) {
-	var results [][]TypedLineStat
-	mapper := func(upn string) error {
-		if studyOnly && strings.HasPrefix(upn, "NS:") {
+func FetchAllTypedLineStats(start int64, end int64, studyOnly bool, upns []string) ([][]TypedLineStat, error) {
+	var stats [][]TypedLineStat
+	if len(upns) > 0 {
+		for _, upn := range upns {
+			stat, err := FetchTypedLineStats(upn, start, end)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch line stats for %q: %w", upn, err)
+			}
+			if len(stat) > 0 {
+				stats = append(stats, stat)
+			}
+		}
+	} else {
+		mapper := func(upn string) error {
+			if studyOnly && strings.HasPrefix(upn, "NS:") {
+				return nil
+			}
+			stat, err := FetchTypedLineStats(upn, start, end)
+			if err != nil {
+				return err
+			}
+			if len(stat) == 0 {
+				return nil
+			}
+			stats = append(stats, stat)
 			return nil
 		}
-		result, err := FetchTypedLineStats(upn, startDate, endDate)
-		if err != nil {
-			return err
+		if err := platform.MapKeys(sCtx(), mapper, TypedLineStatList("")); err != nil {
+			return nil, fmt.Errorf("failed to fetch line stats: %w", err)
 		}
-		if len(result) == 0 {
-			return nil
-		}
-		results = append(results, result)
-		return nil
 	}
-	if err := platform.MapKeys(sCtx(), mapper, TypedLineStatList("")); err != nil {
-		return nil, err
-	}
-	return results, nil
+	return stats, nil
 }
 
 // CannedLineStat records the usage of pre-typed lines (favorites and repeats).

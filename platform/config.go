@@ -16,22 +16,31 @@ import (
 )
 
 type Environment struct {
-	Name           string
-	HttpScheme     string
+	AgePublicKey   string
+	AgeSecretKey   string
+	AwsAccessKey   string
+	AwsBucket      string
+	AwsFolder      string
+	AwsRegion      string
+	AwsSecretKey   string
+	DbKeyPrefix    string
+	DbUrl          string
 	HttpHost       string
 	HttpPort       int
+	HttpScheme     string
+	Name           string
+	SmtpCredId     string
+	SmtpCredSecret string
 	SmtpHost       string
 	SmtpPort       int
-	SmtpCredSecret string
-	SmtpCredId     string
-	DbUrl          string
-	DbKeyPrefix    string
 }
 
 //goland:noinspection SpellCheckingInspection
 var (
 	ciConfig = Environment{
 		Name:           "CI",
+		AgePublicKey:   "age1kq7jnct8jv0d2hr7u3vpf6804emfqwptz6svy9mc9nv7pnkzqc5qsm4wrz",
+		AgeSecretKey:   "AGE-SECRET-KEY-1H30T40KMX70VYEHM2ATF9N02U6KRL46660EFPU8GT76DAJNZN6EQRU7CGA",
 		HttpScheme:     "http",
 		HttpHost:       "localhost",
 		SmtpHost:       "localhost",
@@ -139,16 +148,23 @@ func pushEnvConfig(filename string) error {
 		}
 	}
 	loadedConfig = Environment{
-		Name:           os.Getenv("ENVIRONMENT_NAME"),
-		HttpScheme:     os.Getenv("HTTP_SCHEME"),
-		HttpHost:       os.Getenv("HTTP_HOST"),
-		HttpPort:       getEnvPort(os.Getenv("HTTP_PORT"), 80),
-		SmtpHost:       os.Getenv("SMTP_HOST"),
-		SmtpPort:       getEnvPort(os.Getenv("SMTP_PORT"), 25),
-		SmtpCredSecret: os.Getenv("SMTP_CRED_SECRET"),
-		SmtpCredId:     os.Getenv("SMTP_CRED_ID"),
-		DbUrl:          os.Getenv("REDIS_URL"),
+		AgePublicKey:   os.Getenv("AGE_PUBLIC_KEY"),
+		AgeSecretKey:   os.Getenv("AGE_SECRET_KEY"),
+		AwsAccessKey:   os.Getenv("AWS_ACCESS_KEY"),
+		AwsBucket:      os.Getenv("AWS_BUCKET"),
+		AwsFolder:      os.Getenv("AWS_FOLDER"),
+		AwsRegion:      os.Getenv("AWS_REGION"),
+		AwsSecretKey:   os.Getenv("AWS_SECRET_KEY"),
 		DbKeyPrefix:    os.Getenv("DB_KEY_PREFIX"),
+		DbUrl:          os.Getenv("REDIS_URL"),
+		HttpHost:       os.Getenv("HTTP_HOST"),
+		HttpPort:       getEnvPort(os.Getenv("HTTP_PORT"), 8080),
+		HttpScheme:     os.Getenv("HTTP_SCHEME"),
+		Name:           os.Getenv("ENVIRONMENT_NAME"),
+		SmtpCredId:     os.Getenv("SMTP_CRED_ID"),
+		SmtpCredSecret: os.Getenv("SMTP_CRED_SECRET"),
+		SmtpHost:       os.Getenv("SMTP_HOST"),
+		SmtpPort:       getEnvPort(os.Getenv("SMTP_PORT"), 2025),
 	}
 	runConfigChangeActions()
 	return nil
