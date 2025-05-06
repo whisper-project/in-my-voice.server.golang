@@ -17,3 +17,59 @@
     padding: 10px;
     color: #fff;
 }
+
+.form-control {
+    display: flex;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    justify-content: space-between;
+}
+
+.no-spread {
+    justify-content: left;
+    column-gap: 5px
+}
+
+.width-400 {
+    width: 400px;
+}
+
+.width-250 {
+    width: 250px;
+}
+
+.width-325 {
+    width: 325px;
+}
+
+.width-500 {
+    width: 500px;
+}
+
+body {
+    font-family: sans-serif;
+}
+
+table, th, td {
+    border: 1px solid black;
+    border-collapse: collapse;
+    padding: 10px;
+}
+
+th {
+    background-color: #ffffff;
+}
+
+tr:nth-child(odd) {
+    background-color: #e8f5e9;
+}
+tr:nth-child(even) {
+    background-color: #ffffff;
+}
+
+button {
+    padding: 5px;
+    font-size: medium;
+    border-radius: 5px;
+    border: 2px solid black;
+}

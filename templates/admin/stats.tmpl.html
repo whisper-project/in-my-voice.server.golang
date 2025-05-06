@@ -8,8 +8,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{ template "admin/header.tmpl.html" }}
     <title>InMyVoice Research Administration</title>
 </head>
 <body>
@@ -52,15 +51,15 @@
 <h3>New Typed Lines Report</h3>
 <form action="./stats" method="POST">
     <input type="hidden" name="op" value="typed-lines" />
-    <div>
+    <div class="form-control width-325">
         <label for="start">Start Date:</label>
         <input type="date" id="start" name="start" />
     </div>
-    <div>
+    <div class="form-control width-325">
         <label for="end">End Date:</label>
         <input type="date" id="end" name="end" size="20" />
     </div>
-    <div>
+    <div class="form-control width-325">
         <label for="upns">Restrict to UPNs:</label>
         <select id="upns" name="upns" multiple size="10">
             {{ range .Upns }}
@@ -68,28 +67,32 @@
             {{ end }}
         </select>
     </div>
-    <div>
+    <div class="form-control width-325">
         <label for="target">Report on:</label>
         <select id="target" name="target">
             <option value="study">Study Participants</option>
             <option value="all">All Users</option>
         </select>
     </div>
-    <button type="submit">Report</button>
-    <button type="button" onclick="window.location.href='./stats'">Cancel</button>
+    <div class="form-control width-325">
+        <button type="submit">Generate</button>
+        <button type="button" onclick="window.location.href='./stats'">Cancel</button>
+    </div>
 </form>
 <h3>New Repeated Phrases Report</h3>
 <form action="./stats" method="POST">
     <input type="hidden" name="op" value="repeated-phrases" />
-    <div>
+    <div class="form-control width-325">
         <label for="target">Report on:</label>
         <select id="target" name="target">
             <option value="study">Study Participants</option>
             <option value="all">All Users</option>
         </select>
     </div>
-    <button type="submit">Report</button>
-    <button type="button" onclick="window.location.href='./stats'">Cancel</button>
+    <div class="form-control width-325">
+        <button type="submit">Generate</button>
+        <button type="button" onclick="window.location.href=''">Cancel</button>
+    </div>
 </form>
 {{ template "admin/footer.tmpl.html" }}
 </body>

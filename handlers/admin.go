@@ -427,6 +427,9 @@ func GetStatsHandler(c *gin.Context) {
 	slices.SortFunc(participants, CompareParticipantsFunc(""))
 	upns := make([]string, 0, len(participants))
 	for _, p := range participants {
+		if p.Started == 0 {
+			continue
+		}
 		upns = append(upns, p.Upn)
 	}
 	c.HTML(http.StatusOK, "admin/stats.tmpl.html",
@@ -527,6 +530,10 @@ func CompareParticipantsFunc(sort string) func(a, b *storage.StudyParticipant) i
 		timeCompare := func(t1, t2 int64) int {
 			if t1 == t2 {
 				return upnCompare
+			} else if t1 == 0 {
+				return 1
+			} else if t2 == 0 {
+				return -1
 			} else if t1 < t2 {
 				return -1
 			} else {

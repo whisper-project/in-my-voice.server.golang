@@ -8,8 +8,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{ template "admin/header.tmpl.html" }}
     <title>InMyVoice Participant Administration</title>
 </head>
 <body>
@@ -19,11 +18,11 @@
 <table>
     <thead>
         <tr>
-            <th>UPN</th>
-            <th>Assigned Date (Memo)</th>
+            <th><a href="?sort=upn">UPN</a></th>
+            <th><a href="?sort=assigned">Assigned Date (Memo)</a></th>
             <th>Configured?</th>
-            <th>Start Date</th>
-            <th>End Date</th>
+            <th><a href="?sort=start">Start Date</a></th>
+            <th><a href="?sort=end">End Date</a></th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -48,62 +47,66 @@
         <h3>Edit Participant Info</h3>
         <input type="hidden" name="op" value="edit" />
         <input type="hidden" name="upn" value="{{ .Edit.UPN }}" />
-        <div>
+        <div class="form-control width-500">
             <label for="display">UPN:</label>
             <input type="text" id="display" size="50" value="{{ .Edit.UPN }}" disabled />
         </div>
-        <div>
+        <div class="form-control width-500">
             <label for="memo">Assignment:</label>
             <input type="text" id="memo" name="memo" size="50" value="{{ .Edit.Memo }}" required />
         </div>
         {{ if .Edit.Assigned }}
-        <div>
+        <div class="form-control width-500">
             <label for="assigned">Assigned at:</label>
             <input type="text" id="assigned" name="assigned" size="30" value="{{ .Edit.Assigned }}" disabled />
         </div>
         {{ end }}
         {{ if .Edit.Started }}
-        <div>
+        <div class="form-control width-500">
             <label for="started">Enrolled in study at:</label>
             <input type="text" id="started" name="started" size="30" value="{{ .Edit.Started }}" disabled />
         </div>
         {{ end }}
         {{ if .Edit.Finished }}
-        <div>
+        <div class="form-control width-500">
             <label for="finished">Disenrolled from study at:</label>
             <input type="text" id="finished" name="finished" size="30" value="{{ .Edit.Finished }}" disabled />
         </div>
         {{ end }}
-        <fieldset>
+        <fieldset class="width-500">
             <legend>ElevenLabs Settings:</legend>
-            <div>
+            <div class="form-control width-500">
                 <label for="key">API Key:</label>
                 <input type="text" id="key" name="key" size="60" value="{{ .Edit.Key }}"
                     {{ if .Edit.Finished }} disabled {{ end }}/>
             </div>
-            <div>
+            <div class="form-control width-500">
                 <label for="voice">Voice ID:</label>
                 <input type="text" id="voice" name="voice" size="60" value="{{ .Edit.Voice }}"
                         {{ if .Edit.Finished }} disabled {{ end }}/>
             </div>
         </fieldset>
-        <button type="submit">Save Changes</button>
-        <button type="button" onclick="window.location.href='./participants'">Cancel</button>
+        <div class="form-control width-500">
+            <button type="submit">Save Changes</button>
+            <button type="button" onclick="window.location.href='./participants'">Cancel</button>
+        </div>
     </form>
 {{ else }}
     <form action="./participants" method="POST">
         <h3>Add UPN</h3>
         <input type="hidden" name="op" value="add" />
-        <div>
+        <div class="form-control width-500">
             <label for="upn">UPN:</label>
             <input type="text" id="upn" name="upn" size="50" required />
         </div>
-        <div>
+        <div class="form-control width-500">
             <label for="memo">Assignment (optional):</label>
             <input type="text" id="memo" name="memo" size="30" />
         </div>
-        <button type="submit">Add UPN</button>
-        <button type="button" onclick="window.location.href='./participants'">Cancel</button>
+        <div class="form-control width-500">
+            <button type="submit">Add UPN</button>
+            <button type="button" onclick="window.location.href='./participants'">Cancel</button>
+        </div>
     </form>
 {{ end }}
 {{ template "admin/footer.tmpl.html" }}
