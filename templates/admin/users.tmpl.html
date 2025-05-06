@@ -12,8 +12,9 @@
     <title>InMyVoice User Administration</title>
 </head>
 <body>
-<h2>InMyVoice - User Administration</h2>
+<h1>InMyVoice - User Administration</h1>
 <p style="color: red;">{{ .Message }}</p>
+<h2>Users</h2>
 {{ if .Users }}
 <table>
     <thead>
@@ -37,8 +38,8 @@
 <p>No users.</p>
 {{ end }}
 {{ if .Edit }}
+    <h3>Edit User</h3>
     <form action="./users" method="POST">
-        <h3>Edit User</h3>
         <input type="hidden" name="id" value="{{ .Edit.Id }}" />
         <div class="form-control width-500">
             <label for="email">Email:</label>
@@ -65,8 +66,8 @@
         </div>
     </form>
 {{ else }}
+    <h3>Add User</h3>
     <form action="./users" method="POST">
-        <h3>Add User</h3>
         <input type="hidden" name="id" value="" />
         <div class="form-control width-500">
             <label for="email">Email:</label>

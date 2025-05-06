@@ -8,12 +8,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{ template "admin/header.tmpl.html" }}
     <title>InMyVoice Admin Login</title>
 </head>
 <body>
-<h2>InMyVoice - Administrative Login</h2>
+<h1>InMyVoice - Administrative Login</h1>
 {{if .error}}
     <p>Sorry, but "{{.error}}" doesn't look like a valid email.</p>
     <p>Please <a href="">click here</a> to try again with a valid email.</p>
@@ -22,12 +21,13 @@
     <p>If you need another email sent, <a href="">click here</a> to log in again.</p>
 {{else}}
     <form method="POST">
-        <label for="email">Email:</label>
-        <input type="text" id="email" name="email" size="50" required>
-        <br>
-        <br />
-        <button type="submit">Request login link</button>
-        <br>
+        <div class="form-control width-400">
+            <label for="email">Email:</label>
+            <input type="text" id="email" name="email" size="50" required>
+        </div>
+        <div class="form-control width-400">
+            <button type="submit">Request login link</button>
+        </div>
     </form>
 {{end}}
 </body>

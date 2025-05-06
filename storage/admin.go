@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
 	"go.uber.org/zap"
+	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -196,7 +198,7 @@ func StartSession(userId string) (string, error) {
 		end = end.AddDate(0, 0, 1)
 	}
 	end = time.Date(end.Year(), end.Month(), end.Day(), 4, 0, 0, 0, local)
-	id := uuid.NewString()
+	id := strconv.FormatUint(rand.Uint64(), 36)
 	if err := platform.StoreString(sCtx(), sessionId(id), userId); err != nil {
 		sLog().Error("db failure on session start", zap.String("id", id), zap.Error(err))
 		return "", err

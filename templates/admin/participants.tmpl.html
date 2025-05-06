@@ -12,8 +12,9 @@
     <title>InMyVoice Participant Administration</title>
 </head>
 <body>
-<h2>InMyVoice - Participant Administration</h2>
+<h1>InMyVoice - Participant Administration</h1>
 <p style="color: red;">{{ .Message }}</p>
+<h2>Study Participants</h2>
 {{ if .Participants }}
 <table>
     <thead>
@@ -43,8 +44,8 @@
 <p>No study participants.</p>
 {{ end }}
 {{ if .Edit }}
+    <h3>Edit Participant Info</h3>
     <form action="./participants" method="POST">
-        <h3>Edit Participant Info</h3>
         <input type="hidden" name="op" value="edit" />
         <input type="hidden" name="upn" value="{{ .Edit.UPN }}" />
         <div class="form-control width-500">
@@ -92,8 +93,8 @@
         </div>
     </form>
 {{ else }}
+    <h3>Add UPN</h3>
     <form action="./participants" method="POST">
-        <h3>Add UPN</h3>
         <input type="hidden" name="op" value="add" />
         <div class="form-control width-500">
             <label for="upn">UPN:</label>

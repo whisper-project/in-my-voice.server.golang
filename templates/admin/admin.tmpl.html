@@ -8,12 +8,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{ template "admin/header.tmpl.html" }}
     <title>InMyVoice Adminstration</title>
 </head>
 <body>
-<h2>InMyVoice - Administration</h2>
+<h1>InMyVoice - Administration</h1>
 <p></p>
 {{ if .userManager }}
     <button onclick="window.location.href='./users'">Manage Users</button>
