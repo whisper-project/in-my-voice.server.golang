@@ -120,12 +120,17 @@ func (s *StudyParticipant) FromRedis(b []byte) error {
 }
 
 func (s *StudyParticipant) UpdateApiKey(apiKey string) (bool, error) {
-	if ok, err := services.ElevenValidateApiKey(apiKey); err != nil {
-		return false, err
-	} else if !ok {
-		return false, nil
+	if apiKey == "" {
+		s.ApiKey = ""
+		s.VoiceId = ""
+	} else {
+		if ok, err := services.ElevenValidateApiKey(apiKey); err != nil {
+			return false, err
+		} else if !ok {
+			return false, nil
+		}
+		s.ApiKey = apiKey
 	}
-	s.ApiKey = apiKey
 	if err := platform.SaveObject(sCtx(), s); err != nil {
 		sLog().Error("db failure on participant save",
 			zap.String("studyId", s.Upn), zap.Error(err))
@@ -180,6 +185,25 @@ func GetStudyParticipant(upn string) (*StudyParticipant, error) {
 	return s, nil
 }
 
+func DeleteStudyParticipant(upn string) error {
+	s, err := GetStudyParticipant(upn)
+	if err != nil {
+		return err
+	}
+	if s == nil {
+		return nil
+	}
+	if s.Started > 0 && s.Finished == 0 {
+		return ParticipantInUseError
+	}
+	if err = platform.DeleteStorage(sCtx(), s); err != nil {
+		sLog().Error("db failure on participant delete",
+			zap.String("studyId", upn), zap.Error(err))
+		return err
+	}
+	return nil
+}
+
 func GetAllStudyParticipants() ([]*StudyParticipant, error) {
 	var s StudyParticipant
 	var result []*StudyParticipant
@@ -217,6 +241,7 @@ var (
 	ParticipantAlreadyExistsError = errors.New("participant UPN already exists")
 	ParticipantNotValidError      = errors.New("apiKey or voiceId not valid")
 	ParticipantNotAvailableError  = errors.New("participant UPN not available")
+	ParticipantInUseError         = errors.New("participant UPN is in use in the app")
 )
 
 func GetProfileStudyMembership(profileId string) (string, error) {
@@ -240,10 +265,10 @@ func EnrollStudyParticipant(profileId, upn string) (settings, apiKey string, err
 		return
 	}
 	if p.Assigned == 0 {
-		sLog().Info("can't enroll participant without assignment",
+		sLog().Info("auto-assigning participant",
 			zap.String("studyId", upn), zap.String("profileId", profileId))
-		err = ParticipantNotAvailableError
-		return
+		p.Assigned = time.Now().UnixMilli()
+		p.Memo = "in-app"
 	}
 	if p.ProfileId == "" {
 		p.ProfileId = profileId

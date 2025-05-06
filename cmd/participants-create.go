@@ -66,9 +66,6 @@ func createParticipant(apiKey, voiceId string) {
 	if err != nil {
 		log.Fatalf("Can't create participant %s: %v", upn, err)
 	}
-	if err = p.UpdateAssignment("auto-created"); err != nil {
-		log.Fatalf("Can't auto-assign created participant %s: %v", upn, err)
-	}
 	if ok, err := p.UpdateApiKey(apiKey); err != nil {
 		log.Fatalf("Can't assign API key to participant %s: %v", upn, err)
 	} else if !ok {

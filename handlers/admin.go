@@ -266,9 +266,21 @@ func GetParticipantsHandler(c *gin.Context) {
 	slices.SortFunc(participants, CompareParticipantsFunc(c.Query("sort")))
 	message := c.Query("msg")
 	editId := c.Query("edit")
+	deleteId := c.Query("delete")
 	var pEdit map[string]string
 	pList := make([]map[string]string, 0, len(participants))
 	for _, p := range participants {
+		if deleteId == p.Upn {
+			if err := storage.DeleteStudyParticipant(p.Upn); err != nil {
+				message := url.QueryEscape("Failed to delete participant.")
+				if errors.Is(err, storage.ParticipantInUseError) {
+					message = url.QueryEscape("You can't delete a participant who is active in the study.")
+				}
+				c.Redirect(http.StatusSeeOther, "?msg="+message)
+				return
+			}
+			continue
+		}
 		if editId == p.Upn {
 			editId = ""
 			pEdit = map[string]string{"UPN": p.Upn}
@@ -303,12 +315,18 @@ func PostParticipantsHandler(c *gin.Context) {
 	}
 	op := c.PostForm("op")
 	upn := c.PostForm("upn")
+	msg := ""
+	editAgain := false
 	memo := strings.TrimSpace(c.PostForm("memo"))
+	apiKey := strings.TrimSpace(c.PostForm("key"))
+	voiceId := strings.TrimSpace(c.PostForm("voice"))
+	var p *storage.StudyParticipant
+	var err error
 	if op == "add" {
-		p, err := storage.CreateStudyParticipant(upn)
+		p, err = storage.CreateStudyParticipant(upn)
 		if err != nil {
 			if errors.Is(err, storage.ParticipantAlreadyExistsError) {
-				msg := url.QueryEscape(fmt.Sprintf("A participant with UPN %s already exists.", p.Upn))
+				msg = url.QueryEscape(fmt.Sprintf("A participant with UPN %s already exists.", p.Upn))
 				target := "./participants?msg=" + msg
 				c.Redirect(http.StatusSeeOther, target)
 				return
@@ -316,74 +334,88 @@ func PostParticipantsHandler(c *gin.Context) {
 			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
 			return
 		}
-		if memo != "" {
-			if err = p.UpdateAssignment(memo); err != nil {
-				c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
-				return
-			}
+		msg = url.QueryEscape("UPN added successfully.")
+	} else {
+		// op == edit
+		p, err = storage.GetStudyParticipant(upn)
+		if err != nil {
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
 		}
-		msg := url.QueryEscape("UPN added successfully.")
-		if memo != "" {
-			msg = url.QueryEscape("UPN added and assigned successfully.")
+		if p == nil {
+			msg = url.QueryEscape("Participant not found.")
+			target := "./participants?msg=" + msg
+			c.Redirect(http.StatusSeeOther, target)
+			return
 		}
-		target := "./participants?msg=" + msg
-		c.Redirect(http.StatusSeeOther, target)
-		return
+		msg = url.QueryEscape("Participant info updated successfully.")
 	}
-	// op == edit
-	p, err := storage.GetStudyParticipant(upn)
-	if err != nil {
-		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
-		return
-	}
-	if p == nil {
-		msg := url.QueryEscape("Participant not found.")
-		target := "./participants?msg=" + msg
-		c.Redirect(http.StatusSeeOther, target)
-		return
-	}
+	// process edits
 	if memo != p.Memo {
 		if memo == "" {
-			msg := "Assignment memo cannot be blank."
-			target := "./participants?edit=" + upn + "&msg=" + msg
-			c.Redirect(http.StatusSeeOther, target)
-			return
-		}
-		if err = p.UpdateAssignment(memo); err != nil {
+			msg = "Assignment memo cannot be blank."
+			editAgain = true
+		} else if err = p.UpdateAssignment(memo); err != nil {
 			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
 			return
 		}
 	}
-	if key := c.PostForm("key"); key != "" && key != p.ApiKey {
-		if ok, err := p.UpdateApiKey(key); err != nil {
-			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
-			return
-		} else if !ok {
-			msg := url.QueryEscape("Invalid API key.")
-			target := "./participants?edit=" + upn + "&msg=" + msg
-			c.Redirect(http.StatusSeeOther, target)
-			return
+	// edits to apiKey or voiceId must be processed together
+	if apiKey != p.ApiKey || voiceId != p.VoiceId {
+		allowChanges := true
+		if p.Started > 0 {
+			if apiKey == "" || voiceId == "" {
+				allowChanges = false
+				msg = "You can't remove ElevenLabs settings once the participant has used the app."
+				editAgain = true
+			} else if voiceName, ok, err := services.ElevenValidateVoiceId(apiKey, voiceId); !ok || err != nil {
+				allowChanges = false
+				msg = url.QueryEscape("The ElevenLabs API key and voice ID are invalid or incompatible.")
+				editAgain = true
+			} else {
+				// update the user to the new speech settings (which will go on the participant below)
+				settings := services.ElevenLabsGenerateSettings(apiKey, voiceId, voiceName)
+				_, err = storage.UpdateSpeechSettings(p.ProfileId, settings)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+					return
+				}
+				_ = storage.ProfileClientSpeechDidUpdate(p.ProfileId, "none")
+				_ = storage.EnsureMonitor(p.ProfileId, apiKey)
+			}
+		}
+		// first process API Key changes
+		if allowChanges && apiKey != p.ApiKey {
+			if apiKey == "" {
+				// if you clear the API key, that clears the voiceID!
+				allowChanges = false
+			}
+			if ok, err := p.UpdateApiKey(apiKey); err != nil {
+				c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+				return
+			} else if !ok {
+				allowChanges = false
+				msg = url.QueryEscape("Invalid API key.")
+				editAgain = true
+			}
+		}
+		if allowChanges && voiceId != p.VoiceId {
+			if p.ApiKey == "" {
+				msg = url.QueryEscape("Can't set voice ID without an API key.")
+				editAgain = true
+			} else if ok, err := p.UpdateVoiceId(voiceId); err != nil {
+				c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+				return
+			} else if !ok {
+				msg = url.QueryEscape("Invalid voice ID.")
+				editAgain = true
+			}
 		}
 	}
-	if voice := c.PostForm("voice"); voice != "" && voice != p.VoiceId {
-		if p.ApiKey == "" {
-			msg := url.QueryEscape("Can't set voice ID without an API key.")
-			target := "./participants?edit=" + upn + "&msg=" + msg
-			c.Redirect(http.StatusSeeOther, target)
-			return
-		}
-		if ok, err := p.UpdateVoiceId(voice); err != nil {
-			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
-			return
-		} else if !ok {
-			msg := url.QueryEscape("Invalid voice ID.")
-			target := "./participants?edit=" + upn + "&msg=" + msg
-			c.Redirect(http.StatusSeeOther, target)
-			return
-		}
-	}
-	msg := url.QueryEscape("Participant info updated successfully.")
 	target := "./participants?msg=" + msg
+	if editAgain {
+		target = fmt.Sprintf("./participants?edit=%s&msg=%s", upn, msg)
+	}
 	c.Redirect(http.StatusSeeOther, target)
 }
 
@@ -541,9 +573,30 @@ func CompareParticipantsFunc(sort string) func(a, b *storage.StudyParticipant) i
 				return 1
 			}
 		}
+		configuredCompare := func(a, b *storage.StudyParticipant) int {
+			if a.ApiKey != "" && b.ApiKey != "" {
+				if a.VoiceId != "" && b.VoiceId != "" {
+					return upnCompare
+				} else if a.VoiceId != "" {
+					return -1
+				} else if b.VoiceId != "" {
+					return 1
+				} else {
+					return upnCompare
+				}
+			} else if a.ApiKey != "" {
+				return -1
+			} else if b.ApiKey != "" {
+				return 1
+			} else {
+				return upnCompare
+			}
+		}
 		switch sort {
 		case "assigned":
 			return timeCompare(a.Assigned, b.Assigned)
+		case "configured":
+			return configuredCompare(a, b)
 		case "start":
 			return timeCompare(a.Started, b.Started)
 		case "end":
@@ -582,15 +635,15 @@ func MakeParticipantMap(p *storage.StudyParticipant) map[string]string {
 			memo = memo[:17] + "..."
 		}
 		pMap["Assigned"] = formatDate(p.Assigned) + " (" + memo + ")"
-		if p.ApiKey != "" {
-			if p.VoiceId != "" {
-				pMap["Configured"] = "Yes"
-			} else {
-				pMap["Configured"] = "API Key Only"
-			}
+	}
+	if p.ApiKey != "" {
+		if p.VoiceId != "" {
+			pMap["Configured"] = "Yes"
 		} else {
-			pMap["Configured"] = "No"
+			pMap["Configured"] = "API Key Only"
 		}
+	} else {
+		pMap["Configured"] = "No"
 	}
 	if p.Started > 0 {
 		pMap["Started"] = formatDate(p.Started)

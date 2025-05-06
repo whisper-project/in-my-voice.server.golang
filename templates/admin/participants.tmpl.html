@@ -21,7 +21,7 @@
         <tr>
             <th><a href="?sort=upn">UPN</a></th>
             <th><a href="?sort=assigned">Assigned Date (Memo)</a></th>
-            <th>Configured?</th>
+            <th><a href="?sort=configured">Configured?</a></th>
             <th><a href="?sort=start">Start Date</a></th>
             <th><a href="?sort=end">End Date</a></th>
             <th>Actions</th>
@@ -35,7 +35,11 @@
             <td>{{ .Configured }}</td>
             <td>{{ .Started }}</td>
             <td>{{ .Finished }}</td>
-            <td><a href="?edit={{ .UPN }}">Edit</a></td>
+            <td><a href="?edit={{ .UPN }}">Edit</a>
+                {{ if (or (not .Started) .Finished) }}
+                <a href="?delete={{ .UPN }}">Delete</a>
+                {{ end }}
+            </td>
         </tr>
     {{ end }}
     </tbody>
@@ -54,7 +58,7 @@
         </div>
         <div class="form-control width-500">
             <label for="memo">Assignment:</label>
-            <input type="text" id="memo" name="memo" size="50" value="{{ .Edit.Memo }}" required />
+            <input type="text" id="memo" name="memo" size="50" value="{{ .Edit.Memo }}" />
         </div>
         {{ if .Edit.Assigned }}
         <div class="form-control width-500">
@@ -104,6 +108,17 @@
             <label for="memo">Assignment (optional):</label>
             <input type="text" id="memo" name="memo" size="30" />
         </div>
+        <fieldset class="width-500">
+            <legend>ElevenLabs Settings:</legend>
+            <div class="form-control width-500">
+                <label for="key">API Key:</label>
+                <input type="text" id="key" name="key" size="60" />
+            </div>
+            <div class="form-control width-500">
+                <label for="voice">Voice ID:</label>
+                <input type="text" id="voice" name="voice" size="60" />
+            </div>
+        </fieldset>
         <div class="form-control width-500">
             <button type="submit">Add UPN</button>
             <button type="button" onclick="window.location.href='./participants'">Cancel</button>
