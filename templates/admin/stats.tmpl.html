@@ -62,7 +62,7 @@
     </div>
     <div>
         <label for="upns">Restrict to UPNs:</label>
-        <select id="upns" name="upns" multiple>
+        <select id="upns" name="upns" multiple size="10">
             {{ range .Upns }}
                 <option value="{{ . }}">{{ . }}</option>
             {{ end }}

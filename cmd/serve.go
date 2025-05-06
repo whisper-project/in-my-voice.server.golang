@@ -12,6 +12,7 @@ import (
 	"github.com/whisper-project/in-my-voice.server.golang/api/swift"
 	"github.com/whisper-project/in-my-voice.server.golang/gui/admin"
 	"github.com/whisper-project/in-my-voice.server.golang/lifecycle"
+	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"log"
@@ -62,6 +63,9 @@ func serve(address, port string) {
 	swift.AddRoutes(swiftGroup)
 	adminGroup := r.Group("/gui/admin/v1")
 	admin.AddRoutes(adminGroup)
+	r.Static("/css", "static/css")
+	r.Static("/root", "static/root")
+	r.NoRoute(middleware.RewriteRoot(r))
 	r.LoadHTMLGlob("templates/**/*")
 	lifecycle.Startup(r, fmt.Sprintf("%s:%s", address, port))
 }

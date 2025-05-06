@@ -1,0 +1,19 @@
+/*
+ * Copyright 2025 Daniel C. Brotsky. All rights reserved.
+ * All the copyrighted work in this repository is licensed under the
+ * GNU Affero General Public License v3, reproduced in the LICENSE file.
+ */
+
+.wrapper {
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.box {
+    background-color: rgb(69 164 181);
+    border-radius: 5px;
+    padding: 10px;
+    color: #fff;
+}
