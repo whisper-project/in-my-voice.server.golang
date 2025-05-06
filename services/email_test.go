@@ -12,12 +12,12 @@ import (
 	"testing"
 )
 
-func TestSendAuthenticationCodeViaEmail(t *testing.T) {
+func TestSendLinkViaEmail(t *testing.T) {
 	if err := platform.PushConfig("staging"); err != nil {
 		t.Fatal(err)
 	}
 	defer platform.PopConfig()
-	if err := SendAuthenticationCodeViaEmail("dan@whisper-project.org", uuid.NewString()); err != nil {
+	if err := SendLinkViaEmail("dan@whisper-project.org", uuid.NewString()); err != nil {
 		t.Fatal(err)
 	}
 }

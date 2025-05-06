@@ -48,7 +48,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		middleware.CtxLog(c).Error("failed to read settings", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read request body"})
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read the request body"})
 		return
 	}
 	settings := string(body)
@@ -72,7 +72,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		return
 	}
 	if ok, err := services.ElevenValidateApiKey(apiKey); err != nil {
-		middleware.CtxLog(c).Error("network failure validating API key", zap.Error(err))
+		middleware.CtxLog(c).Error("network failure validating the API key", zap.Error(err))
 		c.JSON(http.StatusBadGateway, gin.H{"status": "error", "error": "Network error reaching ElevenLabs"})
 		return
 	} else if !ok {
@@ -106,7 +106,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		return
 	}
 	if name != voiceName {
-		middleware.CtxLog(c).Info("uploaded voice name does not match voice ID, fixing it",
+		middleware.CtxLog(c).Info("the uploaded voice name does not match voice ID, fixing it",
 			zap.String("actual name", voiceId), zap.String("uploaded name", voiceName),
 		)
 		settings = services.ElevenLabsGenerateSettings(apiKey, voiceId, name)
@@ -145,7 +145,7 @@ func ElevenSpeechFailureHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid code or action"})
 		return
 	}
-	reason := "ElevenLabs call failed"
+	reason := "call to ElevenLabs failed"
 	if code == 401 {
 		reason += ": invalid_api_key"
 	} else {

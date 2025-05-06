@@ -23,10 +23,10 @@ import (
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 )
 
-// Startup takes a configured router and runs a server instance with it as handler.
+// Startup takes a configured router and runs a server instance with it as a handler.
 // The instance is configured so that it can be exited cleanly.
 //
-// This code based on [this example](https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-with-context/server.go)
+// This code is based on [this example](https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-with-context/server.go)
 func Startup(router *gin.Engine, hostPort string) {
 	// Create context that listens for the interrupt signal from the OS.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -46,7 +46,7 @@ func Startup(router *gin.Engine, hostPort string) {
 		running = false
 	}()
 
-	// Listen for the interrupt signal, and restore default behavior
+	// Listen for the interrupt signal and restore default behavior
 	<-ctx.Done()
 	stop()
 	sLog().Info("interrupt received")
@@ -59,14 +59,14 @@ func Startup(router *gin.Engine, hostPort string) {
 	if running {
 		go func() {
 			if err := srv.Shutdown(ctx); err != nil {
-				sLog().Error("http server terminated with error", zap.Error(err))
+				sLog().Error("http server terminated with an error", zap.Error(err))
 				return
 			}
 			sLog().Info("http server gracefully stopped")
 		}()
 	}
 
-	// Stop the monitors and then force close everything
+	// Stop the monitors and then exit
 	sLog().Info("Stopping monitors...")
 	if stopMonitors() != nil {
 		sLog().Info("Monitors failed to stop cleanly")

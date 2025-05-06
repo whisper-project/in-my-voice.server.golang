@@ -15,7 +15,7 @@ import (
 var studyCmd = &cobra.Command{
 	Use:   "study",
 	Short: "Manage study policy and reports.",
-	Long: `Determine policies covering data collection,
+	Long: `Determine the policies covering data collection
 and get reports on data collected.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		log.SetFlags(0)

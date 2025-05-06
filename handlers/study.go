@@ -133,7 +133,7 @@ func LineDataHandler(c *gin.Context) {
 	}
 	var body []map[string]any
 	if err := c.ShouldBind(&body); err != nil {
-		sLog().Info("invalid line-data request body", zap.Error(err))
+		middleware.CtxLog(c).Info("invalid line-data request body", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid request body"})
 		return
 	}

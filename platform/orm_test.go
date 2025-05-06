@@ -427,23 +427,23 @@ func TestSaveMapDeleteOrmTester(t *testing.T) {
 	count := 0
 	found1 := false
 	found2 := false
-	loaded := OrmTestStruct{IdField: "doesn't matter"}
+	loaded := OrmTestStruct{IdField: "value doesn't matter"}
 	mapper := func() error {
 		count++
 		if loaded.IdField == id1 && loaded.CreateDateMillis == 1000 {
 			found1 = true
 			if loaded.Secret != "" {
-				return fmt.Errorf("Loaded data for %q has secret %q, expected %q", id1, loaded.Secret, "")
+				return fmt.Errorf("loaded data for %q has secret %q, expected %q", id1, loaded.Secret, "")
 			}
 		}
 		if loaded.IdField == id2 && loaded.Secret == "secret2" {
 			found2 = true
 			if loaded.CreateDateMillis != 0 {
-				return fmt.Errorf("Loaded data for %q has millis %d, expected %v", id1, loaded.CreateDateMillis, 0)
+				return fmt.Errorf("loaded data for %q has millis %d, expected %v", id1, loaded.CreateDateMillis, 0)
 			}
 		}
 		if err := DeleteStorage(ctx, &loaded); err != nil {
-			return fmt.Errorf("Failed to delete stored data for %q: %v", loaded.IdField, err)
+			return fmt.Errorf("lailed to delete stored data for %q: %v", loaded.IdField, err)
 		}
 		return nil
 	}
@@ -496,7 +496,7 @@ func TestMapKeys(t *testing.T) {
 		}
 		return nil
 	}
-	if err := MapKeys(ctx, mapper1, ormTestKey("doesn't matter")); err != nil {
+	if err := MapKeys(ctx, mapper1, ormTestKey("value doesn't matter")); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Contains(foundKeys, key1) && !slices.Contains(foundKeys, key2) && !slices.Contains(foundKeys, key3) {

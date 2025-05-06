@@ -195,5 +195,5 @@ func FindEnvFile(name string, fallback bool) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("no file %q found in path", name)
+	return "", fmt.Errorf("no file %q found in parent", name)
 }

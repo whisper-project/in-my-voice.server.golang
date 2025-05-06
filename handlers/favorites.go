@@ -49,7 +49,7 @@ func FavoritesPutHandler(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		middleware.CtxLog(c).Error("failed to read settings", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read request body"})
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read the request body"})
 		return
 	}
 	changed, err := storage.UpdateFavoritesSettings(profileId, string(body))

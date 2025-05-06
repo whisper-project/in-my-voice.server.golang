@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"go.uber.org/zap"
@@ -452,7 +453,7 @@ func PostStatsHandler(c *gin.Context) {
 		start, end, err := storage.ComputeReportDates(startString, endString, "2006-01-02")
 		if err != nil {
 			// shouldn't happen
-			sLog().Info("Invalid date in a posted report request",
+			middleware.CtxLog(c).Info("Invalid date in a posted report request",
 				zap.String("start", startString), zap.String("end", endString), zap.Error(err))
 			message := url.QueryEscape("Invalid start or end date.")
 			c.Redirect(http.StatusSeeOther, "./stats?msg="+message)

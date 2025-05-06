@@ -18,7 +18,7 @@ func startMonitors() func() error {
 	sLog().Info("Starting monitors...")
 	stopChannel := make(chan any)
 	updateChannel := make(chan any)
-	// update channel is closed except when we're in the middle of an update
+	// the update channel is closed except when we're in the middle of an update
 	close(updateChannel)
 	go func() {
 		timer := time.NewTicker(1 * time.Hour)

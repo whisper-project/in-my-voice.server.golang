@@ -35,11 +35,11 @@ func EnsureMonitor(profileId, apiKey string) error {
 		return err
 	}
 	if err := platform.AddScoredMember(sCtx(), speechMonitors, 0, profileId); err != nil {
-		sLog().Error("Failed to add new monitor",
+		sLog().Error("Failed to add a new monitor",
 			zap.String("profileId", profileId), zap.Error(err))
 		return err
 	}
-	sLog().Info("Added new monitor", zap.String("profileId", profileId))
+	sLog().Info("Added a new monitor", zap.String("profileId", profileId))
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (s *SpeechMonitor) Update(ctx context.Context) error {
 	lastRenew := s.NextRenew
 	info, err := services.ElevenCheckUserAccount(ctx, s.ApiKey)
 	if err != nil {
-		sLog().Error("Eleven Labs user account check failed",
+		sLog().Error("the check of the ElevenLabs user account failed",
 			zap.String("profileId", s.ProfileId), zap.Error(err))
 		return err
 	}
@@ -139,7 +139,7 @@ func (s *SpeechMonitor) Update(ctx context.Context) error {
 	s.NextCheck = min(time.Now().Unix()+rateDelay, s.NextRenew)
 	switch {
 	case lastRenew < s.NextRenew && lastPct >= 99:
-		// we've renewed and the person had been cut off, re-enable them
+		// we've renewed, and the person had been cut off, so re-enable them
 		_ = ProfileUsageDidUpdate(s.ProfileId)
 	case curPct >= 99 && lastPct < 99:
 		// user has hit their quota, notify them
