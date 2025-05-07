@@ -102,7 +102,7 @@ func AdminHandler(c *gin.Context) {
 	}
 	if u.HasRole(storage.AdminRoleResearcher) {
 		roles["researcher"] = true
-		directLink = "./stats"
+		directLink = "./reports"
 	}
 	if len(roles) == 0 {
 		// should never happen
@@ -465,7 +465,7 @@ func GetStatsHandler(c *gin.Context) {
 		}
 		upns = append(upns, p.Upn)
 	}
-	c.HTML(http.StatusOK, "admin/stats.tmpl.html",
+	c.HTML(http.StatusOK, "admin/reports.tmpl.html",
 		gin.H{"Upns": upns, "Message": message, "Reports": reportList})
 }
 
@@ -488,7 +488,7 @@ func PostStatsHandler(c *gin.Context) {
 			middleware.CtxLog(c).Info("Invalid date in a posted report request",
 				zap.String("start", startString), zap.String("end", endString), zap.Error(err))
 			message := url.QueryEscape("Invalid start or end date.")
-			c.Redirect(http.StatusSeeOther, "./stats?msg="+message)
+			c.Redirect(http.StatusSeeOther, "./reports?msg="+message)
 			return
 		}
 		upns := c.PostFormArray("upns")
@@ -505,7 +505,7 @@ func PostStatsHandler(c *gin.Context) {
 		return
 	}
 	msg := url.QueryEscape("Report generated successfully.")
-	c.Redirect(http.StatusSeeOther, "./stats?msg="+msg)
+	c.Redirect(http.StatusSeeOther, "./reports?msg="+msg)
 }
 
 func DownloadReportHandler(c *gin.Context) {

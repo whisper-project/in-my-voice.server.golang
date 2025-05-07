@@ -1,4 +1,4 @@
-{{ define "admin/stats.tmpl.html" }}
+{{ define "admin/reports.tmpl.html" }}
 <!--
   ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
   ~ All the copyrighted work in this repository is licensed under the
@@ -27,8 +27,8 @@
     <table>
         <thead>
         <tr>
-            <th><a href="./stats">Name</a></th>
-            <th><a href="./stats?sort=generated">Created</a></th>
+            <th><a href="./reports">Name</a></th>
+            <th><a href="./reports?sort=generated">Created</a></th>
             <th>Actions</th>
         </tr>
         </thead>
@@ -49,7 +49,7 @@
     <p>No reports.</p>
 {{ end }}
 <h3>New Typed Lines Report</h3>
-<form action="./stats" method="POST">
+<form action="./reports" method="POST">
     <input type="hidden" name="op" value="typed-lines" />
     <div class="form-control width-325">
         <label for="start">Start Date:</label>
@@ -76,11 +76,11 @@
     </div>
     <div class="form-control width-325">
         <button type="submit">Generate</button>
-        <button type="button" onclick="window.location.href='./stats'">Cancel</button>
+        <button type="button" onclick="window.location.href='./reports'">Cancel</button>
     </div>
 </form>
 <h3>New Repeated Phrases Report</h3>
-<form action="./stats" method="POST">
+<form action="./reports" method="POST">
     <input type="hidden" name="op" value="repeated-phrases" />
     <div class="form-control width-325">
         <label for="target">Report on:</label>
