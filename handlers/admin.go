@@ -46,16 +46,27 @@ func GetLoginHandler(c *gin.Context) {
 }
 
 func PostLoginHandler(c *gin.Context) {
-	retry := c.Request.URL.Path
 	email := strings.TrimSpace(c.Request.FormValue("email"))
 	if !emailPattern.MatchString(email) {
 		c.HTML(http.StatusOK, "admin/login.tmpl.html", gin.H{"error": email})
 		return
 	}
 	user, err := storage.LookupAdminUser(email)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html",
+			gin.H{"retry": "./login", "logout": "./login"})
+		return
+	}
 	if user != nil {
-		var sessionId string
-		sessionId, err = storage.StartSession(user.Id)
+		sessionId, _ := storage.FindSession(user.Id)
+		if sessionId == "" {
+			sessionId, err = storage.StartSession(user.Id)
+			if err != nil {
+				c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html",
+					gin.H{"retry": "./login", "logout": "./login"})
+				return
+			}
+		}
 		if sessionId != "" {
 			path := fmt.Sprintf("%s/%s/admin", storage.AdminGuiPath, sessionId)
 			link := storage.ServerPrefix + path
@@ -63,12 +74,12 @@ func PostLoginHandler(c *gin.Context) {
 			if err != nil {
 				// couldn't send the email, so remove the session
 				_ = storage.DeleteSession(sessionId)
+				middleware.CtxLog(c).Info("Failed to send a login link via email.",
+					zap.String("userId", user.Id), zap.Error(err))
 			}
 		}
-	}
-	if err != nil {
-		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": retry, "logout": retry})
-		return
+	} else {
+		middleware.CtxLog(c).Info("Login attempt from an unauthorized user", zap.String("email", email))
 	}
 	c.HTML(http.StatusOK, "admin/login.tmpl.html", gin.H{"success": email})
 }
@@ -103,6 +114,10 @@ func AdminHandler(c *gin.Context) {
 	if u.HasRole(storage.AdminRoleResearcher) {
 		roles["researcher"] = true
 		directLink = "./reports"
+	}
+	if u.HasRole(storage.AdminRoleSuperAdmin) {
+		roles["developer"] = true
+		directLink = "./server"
 	}
 	if len(roles) == 0 {
 		// should never happen
@@ -539,6 +554,134 @@ func DownloadReportHandler(c *gin.Context) {
 		}
 		return false
 	})
+}
+
+func GetServerHandler(c *gin.Context) {
+	u := getAuthenticatedUser(c)
+	if u == nil || !u.HasRole(storage.AdminRoleSuperAdmin) {
+		// should never happen
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	users, err := storage.GetAllAdminUsers()
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	deleteId := c.Query("delete")
+	editId := c.Query("edit")
+	message := c.Query("msg")
+	var editUser map[string]string
+	slices.SortFunc(users, func(a, b *storage.AdminUser) int { return strings.Compare(a.Email, b.Email) })
+	userList := make([]map[string]string, 0, len(users))
+	for _, user := range users {
+		if !user.HasRole(storage.AdminRoleSuperAdmin) {
+			continue
+		}
+		if deleteId == user.Id {
+			if deleteId == u.Id {
+				msg := url.QueryEscape("You can't delete yourself!")
+				c.Redirect(http.StatusSeeOther, "./users?msg="+msg)
+				return
+			} else {
+				if err := storage.DeleteSuperAdmin(deleteId); err != nil {
+					message = fmt.Sprintf("Failed to delete %s!", user.Email)
+					deleteId = ""
+				} else {
+					msg := url.QueryEscape("User deleted successfully.")
+					c.Redirect(http.StatusSeeOther, "./users?msg="+msg)
+					return
+				}
+			}
+		} else if editId == user.Id {
+			editUser = map[string]string{"Id": user.Id, "Email": user.Email}
+			editId = ""
+		}
+		userMap := map[string]string{"Id": user.Id, "Email": user.Email}
+		userList = append(userList, userMap)
+	}
+	if deleteId != "" || editId != "" {
+		// didn't find this user, clear the query and try again
+		c.Redirect(http.StatusSeeOther, "./server")
+		return
+	}
+	policies := storage.GetStudyPolicies()
+	policyMap := map[string]string{"Collect": "study", "LineData": "profile", "PhraseData": "pool"}
+	if policies.CollectNonStudyStats {
+		policyMap["Collect"] = "all"
+	}
+	if policies.AnonymizeNonStudyLineStats {
+		policyMap["LineData"] = "anon"
+	}
+	if policies.SeparateNonStudyRepeatStats {
+		policyMap["PhraseData"] = "separate"
+	}
+	c.HTML(http.StatusOK, "admin/server.tmpl.html",
+		gin.H{"Users": userList, "Edit": editUser, "Message": message, "Policies": policyMap})
+}
+
+func PostServerHandler(c *gin.Context) {
+	u := getAuthenticatedUser(c)
+	if u == nil || !u.HasRole(storage.AdminRoleSuperAdmin) {
+		// should never happen
+		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+		return
+	}
+	op := c.PostForm("op")
+	if op == "edit" {
+		userId := c.PostForm("id")
+		email := strings.TrimSpace(c.PostForm("email"))
+		if !emailPattern.MatchString(email) {
+			msg := url.QueryEscape("You must provide a valid email address.")
+			target := fmt.Sprintf("./server?edit=%s&msg=%s", userId, msg)
+			c.Redirect(http.StatusSeeOther, target)
+			return
+		}
+		u, _ := storage.GetAdminUser(userId)
+		if u == nil || !u.HasRole(storage.AdminRoleSuperAdmin) {
+			// should never happen
+			msg := url.QueryEscape("User not found.")
+			target := "./server?msg=" + msg
+			c.Redirect(http.StatusSeeOther, target)
+			return
+		}
+		u.Email = email
+		if err := storage.SaveAdminUser(u); err != nil {
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
+		}
+		msg := url.QueryEscape("Admin updated successfully.")
+		c.Redirect(http.StatusSeeOther, "./server?msg="+msg)
+	} else if op == "add" {
+		email := strings.TrimSpace(c.PostForm("email"))
+		user, err := storage.LookupAdminUser(email)
+		if err != nil {
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
+		}
+		if user != nil {
+			if user.HasRole(storage.AdminRoleSuperAdmin) {
+				msg := url.QueryEscape(fmt.Sprintf("An admin with email %s already exists.", email))
+				target := "./server?msg=" + msg
+				c.Redirect(http.StatusSeeOther, target)
+				return
+			}
+		} else {
+			user = storage.NewAdminUser(email)
+		}
+		user.SetRoles([]storage.AdminRole{storage.AdminRoleSuperAdmin})
+		if err := storage.SaveAdminUser(user); err != nil {
+			c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"retry": "", "logout": "./logout"})
+			return
+		}
+		msg := url.QueryEscape("Admin added successfully.")
+		target := "./server?msg=" + msg
+		c.Redirect(http.StatusSeeOther, target)
+		return
+	}
+	// op = policies
+	msg := url.QueryEscape("Post ignored.")
+	c.Redirect(http.StatusSeeOther, "./server?msg="+msg)
 }
 
 func getAuthenticatedUser(c *gin.Context) *storage.AdminUser {

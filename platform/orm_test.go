@@ -509,3 +509,49 @@ func TestMapKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMapStringsAtKeys(t *testing.T) {
+	ctx := context.Background()
+	m := make(map[string]string, 3)
+	key1 := uuid.NewString()
+	if err := StoreString(ctx, ormTestKey(key1), "value1"); err != nil {
+		t.Fatal(err)
+	}
+	m[key1] = "value1"
+	key2 := uuid.NewString()
+	if err := StoreString(ctx, ormTestKey(key2), "value2"); err != nil {
+		t.Fatal(err)
+	}
+	m[key2] = "value2"
+	key3 := uuid.NewString()
+	if err := StoreString(ctx, ormTestKey(key3), "value3"); err != nil {
+		t.Fatal(err)
+	}
+	m[key3] = "value3"
+	mapper1 := func(k, v string) error {
+		val, ok := m[k]
+		if !ok {
+			return nil
+		}
+		if v != val {
+			t.Errorf("found key %q with value %q; expected %q", k, v, val)
+		}
+		delete(m, k)
+		if err := DeleteStorage(ctx, ormTestKey(k)); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err := MapStringsAtKeys(ctx, mapper1, ormTestKey("value doesn't matter")); err != nil {
+		t.Fatal(err)
+	}
+	if len(m) != 0 {
+		t.Errorf("there are remaining keys and values: %v", m)
+	}
+	mapper2 := func(k string) error {
+		return fmt.Errorf("found key %q; expected none", k)
+	}
+	if err := MapKeys(ctx, mapper2, ormTestKey("")); err != nil {
+		t.Fatal(err)
+	}
+}

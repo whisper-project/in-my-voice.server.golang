@@ -158,7 +158,7 @@ func LookupAdminUser(email string) (*AdminUser, error) {
 		return nil, err
 	}
 	for _, u := range users {
-		if u.Email == email {
+		if strings.ToLower(u.Email) == strings.ToLower(email) {
 			return u, nil
 		}
 	}
@@ -178,6 +178,33 @@ func EnsureSuperAdmin(email string) error {
 		}
 	}
 	return nil
+}
+
+func DeleteSuperAdmin(email string) error {
+	users, err := GetAllAdminUsers()
+	if err != nil {
+		return err
+	}
+	var toDelete string
+	var keepCount int
+	for _, u := range users {
+		if u.HasRole(AdminRoleSuperAdmin) {
+			if u.Email == email {
+				toDelete = u.Id
+			} else {
+				keepCount++
+			}
+		}
+	}
+	if keepCount == 0 {
+		sLog().Info("super admin delete would leave none", zap.String("email", email))
+		return ParticipantNotAvailableError
+	}
+	if toDelete == "" {
+		sLog().Info("no such super admin to delete", zap.String("email", email))
+		return ParticipantNotValidError
+	}
+	return DeleteAdminUser(toDelete)
 }
 
 // A sessionId is an expiring key whose value is the user id in the session.
@@ -210,6 +237,21 @@ func StartSession(userId string) (string, error) {
 	sLog().Info("session started",
 		zap.String("id", id), zap.String("userId", userId), zap.Time("end", end))
 	return id, nil
+}
+
+func FindSession(userId string) (string, error) {
+	var foundId string
+	mapper := func(sId, uId string) error {
+		if uId == userId {
+			foundId = sId
+		}
+		return nil
+	}
+	if err := platform.MapStringsAtKeys(sCtx(), mapper, sessionId("")); err != nil {
+		sLog().Error("db failure while mapping over sessions", zap.Error(err))
+		return "", err
+	}
+	return foundId, nil
 }
 
 func GetSessionUser(id string) (*AdminUser, error) {

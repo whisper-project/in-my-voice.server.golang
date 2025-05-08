@@ -46,7 +46,7 @@ func (s *StudyPolicies) FromRedis(b []byte) error {
 }
 
 var (
-	DefaultStudyPolicies = StudyPolicies{true, true, true}
+	DefaultStudyPolicies = StudyPolicies{false, true, true}
 	currentStudyPolicies = DefaultStudyPolicies
 )
 
@@ -61,7 +61,7 @@ func loadPoliciesConfigAction() {
 	// presumably they've never been set, so use the defaults
 	if !errors.Is(err, platform.NotFoundError) {
 		// warn if we really had a database failure
-		sLog().Error("db failure on study policies load", zap.Error(err))
+		sLog().Error("db failure loading study policies", zap.Error(err))
 	}
 	currentStudyPolicies = DefaultStudyPolicies
 	if err = platform.SaveObject(ctx, &currentStudyPolicies); err != nil {

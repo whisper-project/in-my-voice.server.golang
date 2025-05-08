@@ -25,5 +25,7 @@ func AddRoutes(r *gin.RouterGroup) {
 	r.POST("/:sessionId/participants", handlers.AuthMiddleware, handlers.PostParticipantsHandler)
 	r.GET("/:sessionId/reports", handlers.AuthMiddleware, handlers.GetStatsHandler)
 	r.POST("/:sessionId/reports", handlers.AuthMiddleware, handlers.PostStatsHandler)
+	r.GET("/:sessionId/server", handlers.AuthMiddleware, handlers.GetServerHandler)
+	r.POST("/:sessionId/server", handlers.AuthMiddleware, handlers.PostServerHandler)
 	r.GET("/:sessionId/download-report/:reportId", handlers.AuthMiddleware, handlers.DownloadReportHandler)
 }

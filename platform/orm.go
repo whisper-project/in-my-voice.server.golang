@@ -382,7 +382,24 @@ func MapKeys[K RedisKey](ctx context.Context, f func(string) error, k K) error {
 		key := iter.Val()
 		id := strings.TrimPrefix(key, prefix+k.StoragePrefix())
 		if err := f(id); err != nil {
-			return fmt.Errorf("process key %s, id %s: %w", key, id, err)
+			return fmt.Errorf("process key %q, id %q: %w", key, id, err)
+		}
+	}
+	return nil
+}
+
+func MapStringsAtKeys[K RedisKey](ctx context.Context, f func(string, string) error, k K) error {
+	db, prefix := GetDb()
+	iter := db.Scan(ctx, 0, prefix+k.StoragePrefix()+"*", 20).Iterator()
+	for iter.Next(ctx) {
+		key := iter.Val()
+		id := strings.TrimPrefix(key, prefix+k.StoragePrefix())
+		val, err := db.Get(ctx, key).Result()
+		if err != nil {
+			return fmt.Errorf("fetch key %q: %w", key, err)
+		}
+		if err = f(id, val); err != nil {
+			return fmt.Errorf("process key %q, id %q, val %q: %w", key, id, val, err)
 		}
 	}
 	return nil
