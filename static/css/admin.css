@@ -42,12 +42,16 @@ tr:nth-child(even) {
     column-gap: 5px
 }
 
-.width-400 {
-    width: 400px;
+.width-250 {
+    width: 250px;
 }
 
 .width-325 {
     width: 325px;
+}
+
+.width-400 {
+    width: 400px;
 }
 
 .width-500 {

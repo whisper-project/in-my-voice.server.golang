@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Daniel C. Brotsky. All rights reserved.
+ * Copyright 2024-2025 Daniel C. Brotsky. All rights reserved.
  * All the copyrighted work in this repository is licensed under the
  * GNU Affero General Public License v3, reproduced in the LICENSE file.
  */
@@ -18,8 +18,8 @@ import (
 )
 
 func AnomalyHandler(c *gin.Context) {
-	clientId := c.GetHeader("X-Client-Id")
-	profileId := c.GetHeader("X-Profile-Id")
+	clientId := c.GetHeader("X-Client-ReportId")
+	profileId := c.GetHeader("X-Profile-ReportId")
 	clientType := c.GetHeader("X-Client-Type")
 	message := c.Param("message")
 	middleware.CtxLog(c).Info("Anomaly reported",
@@ -37,13 +37,12 @@ func LaunchHandler(c *gin.Context) {
 	storage.ObserveClientLaunch(clientType, clientId, profileId)
 	// make sure the client knows whether they're enrolled in the study
 	// and whether they should be collecting stats for non-study members
-	isEnrolled, err := storage.GetProfileStudyMembership(profileId)
+	studyId, isEnrolled, err := storage.GetProfileStudyMembership(profileId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
-	c.Header("X-Study-Membership-Update", strconv.FormatBool(isEnrolled != ""))
-	c.Header("X-Non-Study-Collect-Stats-Update", strconv.FormatBool(storage.GetStudyPolicies().CollectNonStudyStats))
+	c.Header("X-Study-Membership-Update", strconv.FormatBool(studyId != "" && isEnrolled != ""))
 	// make sure any other update annotation has been removed,
 	// because clients update everything at launch
 	c.Header("X-Speech-Settings-Update", "")
@@ -89,8 +88,8 @@ func ShutdownHandler(c *gin.Context) {
 }
 
 func ValidateRequest(c *gin.Context) (clientId, profileId string, ok bool) {
-	clientId = c.GetHeader("X-Client-Id")
-	profileId = c.GetHeader("X-Profile-Id")
+	clientId = c.GetHeader("X-Client-ReportId")
+	profileId = c.GetHeader("X-Profile-ReportId")
 	if uuid.Validate(clientId) != nil || uuid.Validate(profileId) != nil {
 		middleware.CtxLog(c).Info("Invalid client or profile ID",
 			zap.String("clientId", clientId), zap.String("profileId", profileId))

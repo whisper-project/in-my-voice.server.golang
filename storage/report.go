@@ -9,7 +9,6 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/tealeg/xlsx/v3"
@@ -18,33 +17,32 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
 	"slices"
 	"time"
 )
 
+type ReportType = string
+
 const (
-	ReportTypeLines   = "typed-lines"
-	ReportTypePhrases = "repeated-phrases"
+	ReportTypeLines   = "lines"
+	ReportTypePhrases = "phrases"
 )
 
 type StudyReport struct {
-	Id        string
-	Type      string
+	ReportId  string
+	StudyId   string
+	Type      ReportType
+	Name      string
 	Start     int64
 	End       int64
-	StudyOnly bool
 	Upns      []string
 	Filename  string
 	Generated int64
 	Stored    bool
+	Schedule  string
 }
 
-func (s *StudyReport) StoragePrefix() string {
-	return "study-report:"
-}
-func (s *StudyReport) StorageId() string {
-	return s.Id
-}
 func (s *StudyReport) ToRedis() ([]byte, error) {
 	var b bytes.Buffer
 	if err := gob.NewEncoder(&b).Encode(s); err != nil {
@@ -57,52 +55,38 @@ func (s *StudyReport) FromRedis(b []byte) error {
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
-func (s *StudyReport) Generate(dest string) (err error) {
-	switch s.Type {
-	case ReportTypeLines:
-		var stats [][]TypedLineStat
-		stats, err = FetchAllTypedLineStats(s.Start, s.End, s.StudyOnly, s.Upns)
-		if err == nil {
-			err = generateLinesReport(dest, stats)
-		}
-	case ReportTypePhrases:
-		var stats []CannedLineStat
-		stats, err = FetchAllCannedLineStats(s.StudyOnly)
-		if err == nil {
-			err = generatePhraseReport(dest, stats)
-		}
-	default:
-		err = fmt.Errorf("unknown report type: %s", s.Type)
-	}
-	if err == nil {
-		s.Generated = time.Now().UnixMilli()
-	}
-	return
+// The ReportIndex of a studyId maps from reportId to report.
+type ReportIndex string
+
+func (i ReportIndex) StoragePrefix() string {
+	return "study-reports:"
+}
+func (i ReportIndex) StorageId() string {
+	return string(i)
 }
 
-func (s *StudyReport) DisplayName() string {
-	prefix := "all-"
-	if len(s.Upns) > 0 {
-		prefix = "upns-"
-	} else if s.StudyOnly {
-		prefix = "study-"
+func (s *StudyReport) save() error {
+	b, err := s.ToRedis()
+	if err != nil {
+		sLog().Error("failed to serialize the report", zap.Any("report", s), zap.Error(err))
+		return err
 	}
-	var startPart string
-	if s.Start > 0 {
-		startDate := time.UnixMilli(s.Start).In(AdminTZ)
-		startPart = fmt.Sprintf("from-%s-", startDate.Format("01-02-06"))
+	if err := platform.MapSet(sCtx(), ReportIndex(s.StudyId), s.ReportId, string(b)); err != nil {
+		sLog().Error("failed to save the report", zap.Any("report", s), zap.Error(err))
+		return err
 	}
-	if s.End == 0 {
-		s.End = time.Now().In(AdminTZ).UnixMilli()
-	}
-	endDate := time.UnixMilli(s.End).In(AdminTZ)
-	endPart := fmt.Sprintf("thru-%s", endDate.Format("01-02-06"))
-	return prefix + s.Type + "-" + startPart + endPart
+	return nil
 }
 
-func (s *StudyReport) GenerateAndStore() error {
-	localPath := path.Join(os.TempDir(), s.Id)
-	if err := s.Generate(localPath); err != nil {
+var illegalFilenameChars = regexp.MustCompile(`[\\/:*?"<>|&,]+`)
+
+func (s *StudyReport) SanitizeName() string {
+	return illegalFilenameChars.ReplaceAllString(s.Name, "-")
+}
+
+func (s *StudyReport) Generate() error {
+	localPath := path.Join(os.TempDir(), s.ReportId)
+	if err := s.generate(localPath); err != nil {
 		sLog().Error("failed to generate a report",
 			zap.Any("report", s), zap.Error(err))
 		return err
@@ -113,24 +97,22 @@ func (s *StudyReport) GenerateAndStore() error {
 			zap.Any("report", s), zap.Error(err))
 	}
 	defer f.Close()
-	if err = platform.S3PutEncryptedBlob(sCtx(), s.Id, f); err != nil {
+	if err = platform.S3PutEncryptedBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId, f); err != nil {
 		sLog().Error("failed to store the generated report",
 			zap.Any("report", s), zap.Error(err))
 		return err
 	}
 	s.Stored = true
-	if err = platform.SaveObject(sCtx(), s); err != nil {
-		sLog().Error("failed to save the report object",
-			zap.Any("report", s), zap.Error(err))
+	if err = s.save(); err != nil {
 		_ = os.Remove(localPath)
-		_ = platform.S3DeleteBlob(sCtx(), s.Id)
+		_ = platform.S3DeleteBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId)
 		return err
 	}
 	return nil
 }
 
 func (s *StudyReport) Retrieve() (io.ReadCloser, error) {
-	localPath := path.Join(os.TempDir(), s.Id)
+	localPath := path.Join(os.TempDir(), s.ReportId)
 	if _, err := os.Stat(localPath); err == nil {
 		return os.Open(localPath)
 	}
@@ -140,7 +122,7 @@ func (s *StudyReport) Retrieve() (io.ReadCloser, error) {
 			zap.Any("report", s), zap.Error(err))
 		return nil, err
 	}
-	if err = platform.S3GetEncryptedBlob(sCtx(), s.Id, f); err != nil {
+	if err = platform.S3GetEncryptedBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId, f); err != nil {
 		f.Close()
 		_ = os.Remove(localPath)
 		sLog().Error("failed to retrieve the report from S3",
@@ -158,7 +140,7 @@ func (s *StudyReport) Retrieve() (io.ReadCloser, error) {
 }
 
 func (s *StudyReport) Delete() error {
-	localPath := path.Join(os.TempDir(), s.Id)
+	localPath := path.Join(os.TempDir(), s.ReportId)
 	if _, err := os.Stat(localPath); err == nil {
 		if err := os.Remove(localPath); err != nil {
 			sLog().Error("failed to delete the local report file",
@@ -166,12 +148,12 @@ func (s *StudyReport) Delete() error {
 		}
 	}
 	if s.Stored {
-		if err := platform.S3DeleteBlob(sCtx(), s.Id); err != nil {
+		if err := platform.S3DeleteBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId); err != nil {
 			sLog().Error("failed to delete the report from S3",
 				zap.Any("report", s), zap.Error(err))
 		}
 	}
-	err := platform.DeleteStorage(sCtx(), s)
+	err := platform.MapRemove(sCtx(), ReportIndex(s.StudyId), s.ReportId)
 	if err != nil {
 		sLog().Error("failed to delete the report from storage",
 			zap.Any("report", s), zap.Error(err))
@@ -179,42 +161,54 @@ func (s *StudyReport) Delete() error {
 	return err
 }
 
-func NewStudyReport(reportType string, start, end int64, studyOnly bool, upns []string) *StudyReport {
+func NewStudyReport(studyId, name, reportType string, start, end int64, upns []string) *StudyReport {
 	s := &StudyReport{
-		Id:        uuid.NewString(),
-		Type:      reportType,
-		Start:     start,
-		End:       end,
-		StudyOnly: studyOnly,
-		Upns:      upns,
+		ReportId: uuid.NewString(),
+		StudyId:  studyId,
+		Name:     name,
+		Type:     reportType,
+		Start:    start,
+		End:      end,
+		Upns:     upns,
 	}
-	s.Filename = s.DisplayName() + ".xlsx"
+	s.Filename = s.SanitizeName() + ".xlsx"
 	return s
 }
 
-func GetStudyReport(id string) (*StudyReport, error) {
-	s := &StudyReport{Id: id}
-	if err := platform.LoadObject(sCtx(), s); err != nil {
-		if errors.Is(err, platform.NotFoundError) {
-			return nil, nil
-		}
-		sLog().Error("db failure on report fetch", zap.String("id", id), zap.Error(err))
+func GetStudyReport(studyId, reportId string) (*StudyReport, error) {
+	val, err := platform.MapGet(sCtx(), ReportIndex(studyId), reportId)
+	if err != nil {
+		sLog().Error("db failure on report fetch",
+			zap.String("studyId", studyId), zap.String("reportId", reportId), zap.Error(err))
 		return nil, err
 	}
-	return s, nil
+	if val == "" {
+		return nil, nil
+	}
+	var s StudyReport
+	if err := s.FromRedis([]byte(val)); err != nil {
+		sLog().Error("db failure on report deserialization",
+			zap.String("studyId", studyId), zap.String("reportId", reportId), zap.Error(err))
+		return nil, err
+	}
+	return &s, nil
 }
 
-func FetchAllStudyReports() ([]*StudyReport, error) {
+func FetchAllStudyReports(studyId string) ([]*StudyReport, error) {
 	var results []*StudyReport
-	s := &StudyReport{}
-	mapper := func() error {
-		n := *s
-		results = append(results, &n)
-		return nil
-	}
-	if err := platform.MapObjects(sCtx(), mapper, s); err != nil {
-		sLog().Error("failure mapping over study reports", zap.Error(err))
+	m, err := platform.MapGetAll(sCtx(), ReportIndex(studyId))
+	if err != nil {
+		sLog().Error("db failure on report index fetch", zap.String("studyId", studyId), zap.Error(err))
 		return nil, err
+	}
+	for k, v := range m {
+		var s StudyReport
+		if err := s.FromRedis([]byte(v)); err != nil {
+			sLog().Error("db failure on report deserialization",
+				zap.String("studyId", studyId), zap.String("reportId", k), zap.Error(err))
+			return nil, err
+		}
+		results = append(results, &s)
 	}
 	return results, nil
 }
@@ -237,6 +231,29 @@ func ComputeReportDates(startString, endString, dateFormat string) (start, end i
 		d = time.Now().In(AdminTZ)
 	}
 	end = time.Date(d.Year(), d.Month(), d.Day(), 23, 59, 59, 999999999, AdminTZ).UnixMilli()
+	return
+}
+
+func (s *StudyReport) generate(dest string) (err error) {
+	switch s.Type {
+	case ReportTypeLines:
+		var stats [][]TypedLineStat
+		stats, err = FetchAllTypedLineStats(s.StudyId, s.Start, s.End, s.Upns)
+		if err == nil {
+			err = generateLinesReport(dest, stats)
+		}
+	case ReportTypePhrases:
+		var stats []PhraseStat
+		stats, err = FetchAllPhraseStats(s.StudyId)
+		if err == nil {
+			err = generatePhraseReport(dest, stats)
+		}
+	default:
+		err = fmt.Errorf("unknown report type: %s", s.Type)
+	}
+	if err == nil {
+		s.Generated = time.Now().UnixMilli()
+	}
 	return
 }
 
@@ -292,9 +309,9 @@ func generateLinesReport(name string, stats [][]TypedLineStat) error {
 	return nil
 }
 
-func generatePhraseReport(name string, stats []CannedLineStat) error {
+func generatePhraseReport(name string, stats []PhraseStat) error {
 	// the report is sorted by default: descending by total usage
-	slices.SortFunc(stats, func(a, b CannedLineStat) int {
+	slices.SortFunc(stats, func(a, b PhraseStat) int {
 		if diff := (a.FavoriteCount + a.RepeatCount) - (b.FavoriteCount + b.RepeatCount); diff > 0 {
 			return -1
 		} else if diff < 0 {

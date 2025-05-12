@@ -330,6 +330,16 @@ func MapSet[T RedisKey](ctx context.Context, obj T, k string, v string) error {
 	return nil
 }
 
+func MapGetKeys[T RedisKey](ctx context.Context, obj T) ([]string, error) {
+	db, prefix := GetDb()
+	key := prefix + obj.StoragePrefix() + obj.StorageId()
+	res := db.HKeys(ctx, key)
+	if err := res.Err(); err != nil {
+		return nil, err
+	}
+	return res.Val(), nil
+}
+
 func MapGetAll[T RedisKey](ctx context.Context, obj T) (map[string]string, error) {
 	db, prefix := GetDb()
 	key := prefix + obj.StoragePrefix() + obj.StorageId()

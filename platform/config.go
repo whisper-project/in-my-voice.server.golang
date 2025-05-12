@@ -16,23 +16,23 @@ import (
 )
 
 type Environment struct {
-	AgePublicKey   string
-	AgeSecretKey   string
-	AwsAccessKey   string
-	AwsBucket      string
-	AwsFolder      string
-	AwsRegion      string
-	AwsSecretKey   string
-	DbKeyPrefix    string
-	DbUrl          string
-	HttpHost       string
-	HttpPort       int
-	HttpScheme     string
-	Name           string
-	SmtpCredId     string
-	SmtpCredSecret string
-	SmtpHost       string
-	SmtpPort       int
+	AgePublicKey    string
+	AgeSecretKey    string
+	AwsAccessKey    string
+	AwsBucket       string
+	AwsReportFolder string
+	AwsRegion       string
+	AwsSecretKey    string
+	DbKeyPrefix     string
+	DbUrl           string
+	HttpHost        string
+	HttpPort        int
+	HttpScheme      string
+	Name            string
+	SmtpCredId      string
+	SmtpCredSecret  string
+	SmtpHost        string
+	SmtpPort        int
 }
 
 //goland:noinspection SpellCheckingInspection
@@ -148,23 +148,23 @@ func pushEnvConfig(filename string) error {
 		}
 	}
 	loadedConfig = Environment{
-		AgePublicKey:   os.Getenv("AGE_PUBLIC_KEY"),
-		AgeSecretKey:   os.Getenv("AGE_SECRET_KEY"),
-		AwsAccessKey:   os.Getenv("AWS_ACCESS_KEY"),
-		AwsBucket:      os.Getenv("AWS_BUCKET"),
-		AwsFolder:      os.Getenv("AWS_FOLDER"),
-		AwsRegion:      os.Getenv("AWS_REGION"),
-		AwsSecretKey:   os.Getenv("AWS_SECRET_KEY"),
-		DbKeyPrefix:    os.Getenv("DB_KEY_PREFIX"),
-		DbUrl:          os.Getenv("REDIS_URL"),
-		HttpHost:       os.Getenv("HTTP_HOST"),
-		HttpPort:       getEnvPort(os.Getenv("HTTP_PORT"), 8080),
-		HttpScheme:     os.Getenv("HTTP_SCHEME"),
-		Name:           os.Getenv("ENVIRONMENT_NAME"),
-		SmtpCredId:     os.Getenv("SMTP_CRED_ID"),
-		SmtpCredSecret: os.Getenv("SMTP_CRED_SECRET"),
-		SmtpHost:       os.Getenv("SMTP_HOST"),
-		SmtpPort:       getEnvPort(os.Getenv("SMTP_PORT"), 2025),
+		AgePublicKey:    os.Getenv("AGE_PUBLIC_KEY"),
+		AgeSecretKey:    os.Getenv("AGE_SECRET_KEY"),
+		AwsAccessKey:    os.Getenv("AWS_ACCESS_KEY"),
+		AwsBucket:       os.Getenv("AWS_BUCKET"),
+		AwsReportFolder: os.Getenv("AWS_REPORT_FOLDER"),
+		AwsRegion:       os.Getenv("AWS_REGION"),
+		AwsSecretKey:    os.Getenv("AWS_SECRET_KEY"),
+		DbKeyPrefix:     os.Getenv("DB_KEY_PREFIX"),
+		DbUrl:           os.Getenv("REDIS_URL"),
+		HttpHost:        os.Getenv("HTTP_HOST"),
+		HttpPort:        getEnvPort(os.Getenv("HTTP_PORT"), 8080),
+		HttpScheme:      os.Getenv("HTTP_SCHEME"),
+		Name:            os.Getenv("ENVIRONMENT_NAME"),
+		SmtpCredId:      os.Getenv("SMTP_CRED_ID"),
+		SmtpCredSecret:  os.Getenv("SMTP_CRED_SECRET"),
+		SmtpHost:        os.Getenv("SMTP_HOST"),
+		SmtpPort:        getEnvPort(os.Getenv("SMTP_PORT"), 2025),
 	}
 	runConfigChangeActions()
 	return nil

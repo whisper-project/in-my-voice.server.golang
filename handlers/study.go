@@ -20,26 +20,29 @@ func JoinStudyHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
+	studyId, upn, err := storage.GetProfileStudyMembership(profileId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+		return
+	}
+	if studyId != "" || upn != "" {
+		middleware.CtxLog(c).Info("profile already enrolled in study",
+			zap.String("clientId", clientId), zap.String("profileId", profileId),
+			zap.String("studyId", studyId), zap.String("upn", upn))
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "study ID already assigned"})
+	}
 	var body map[string]any
 	if err := c.ShouldBind(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid request body"})
 		return
 	}
-	studyId, ok := body["studyId"].(string)
-	if !ok || studyId == "" {
+	studyId, _ = body["studyId"].(string)
+	upn, _ = body["upn"].(string)
+	if studyId == "" || upn == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid request body"})
 		return
 	}
-	if upn, err := storage.GetProfileStudyMembership(profileId); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
-		return
-	} else if upn != "" {
-		middleware.CtxLog(c).Info("profile already enrolled in study",
-			zap.String("clientId", clientId), zap.String("profileId", profileId),
-			zap.String("studyId", studyId))
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "study ID already assigned"})
-	}
-	settings, apiKey, err := storage.EnrollStudyParticipant(profileId, studyId)
+	settings, apiKey, err := storage.EnrollStudyParticipant(profileId, studyId, upn)
 	if errors.Is(err, storage.ParticipantNotAvailableError) {
 		middleware.CtxLog(c).Info("study ID invalid or not available",
 			zap.String("clientId", clientId), zap.String("profileId", profileId),
@@ -73,7 +76,7 @@ func LeaveStudyHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
-	upn, err := storage.GetProfileStudyMembership(profileId)
+	studyId, upn, err := storage.GetProfileStudyMembership(profileId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
@@ -83,7 +86,7 @@ func LeaveStudyHandler(c *gin.Context) {
 			zap.String("studyId", upn))
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "no study ID assigned"})
 	}
-	if err = storage.UnenrollStudyParticipant(profileId, upn); err != nil {
+	if err = storage.UnenrollStudyParticipant(profileId, studyId, upn); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
@@ -99,26 +102,14 @@ func LineDataHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
-	upn, err := storage.GetProfileStudyMembership(profileId)
+	studyId, upn, err := storage.GetProfileStudyMembership(profileId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
-	inStudy := true
-	if upn == "" {
-		if !storage.GetStudyPolicies().CollectNonStudyStats {
-			middleware.CtxLog(c).Info("Refusing line data for non-study profile.",
-				zap.String("profileId", profileId))
-			c.Header("X-Non-Study-Collect-Stats-Update", "false")
-			c.Status(http.StatusNoContent)
-			return
-		}
-		inStudy = false
-		if storage.GetStudyPolicies().AnonymizeNonStudyLineStats {
-			upn = "NS:anonymous"
-		} else {
-			upn = "NS:" + profileId
-		}
+	if studyId == "" || upn == "" {
+		// no data kept for non-study participants
+		return
 	}
 	var platform storage.Platform = storage.PlatformUnknown
 	switch header := c.GetHeader("X-Platform-Info"); header {
@@ -138,17 +129,17 @@ func LineDataHandler(c *gin.Context) {
 		return
 	}
 	middleware.CtxLog(c).Info("received line-data", zap.Int("count", len(body)))
-	go processLineData(inStudy, platform, upn, body)
+	go processLineData(platform, studyId, upn, body)
 	c.Status(http.StatusNoContent)
 }
 
-func processLineData(inStudy bool, platform storage.Platform, upn string, body []map[string]any) {
+func processLineData(platform storage.Platform, studyId, upn string, body []map[string]any) {
 	lines := make([]storage.TypedLineStat, len(body))
 	var j = 0
 	for _, data := range body {
 		if isFavorite, ok := data["isFavorite"].(bool); ok {
 			if text, ok := data["text"].(string); ok {
-				saveRepeatLine(text, isFavorite, inStudy)
+				saveRepeatLine(studyId, text, isFavorite)
 			}
 		} else {
 			if ok := fillStat(&lines[j], platform, upn, data); ok {
@@ -157,7 +148,7 @@ func processLineData(inStudy bool, platform storage.Platform, upn string, body [
 		}
 	}
 	if j > 0 {
-		_ = storage.TypedLineStatList(upn).PushRange(lines[0:j])
+		_ = storage.StudyTypedLineStatsIndex(studyId + "+" + upn).PushRange(lines[0:j])
 	}
 }
 
@@ -180,8 +171,8 @@ func fillStat(stat *storage.TypedLineStat, platform storage.Platform, upn string
 	return false
 }
 
-func saveRepeatLine(text string, isFavorite bool, inStudy bool) {
-	stat, err := storage.GetOrCreateCannedLineStat(text, inStudy)
+func saveRepeatLine(studyId, text string, isFavorite bool) {
+	stat, err := storage.GetOrCreatePhraseStat(studyId, text)
 	if err != nil {
 		return
 	}
@@ -190,5 +181,5 @@ func saveRepeatLine(text string, isFavorite bool, inStudy bool) {
 	} else {
 		stat.RepeatCount++
 	}
-	_ = storage.SaveCannedLineStat(stat)
+	_ = storage.SavePhraseStat(studyId, stat)
 }

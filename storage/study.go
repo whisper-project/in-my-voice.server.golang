@@ -8,7 +8,6 @@ package storage
 
 import (
 	"bytes"
-	"context"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -22,72 +21,135 @@ import (
 	"time"
 )
 
-type StudyPolicies struct {
-	CollectNonStudyStats        bool
-	AnonymizeNonStudyLineStats  bool
-	SeparateNonStudyRepeatStats bool
+// A Study is the locus of data collection and participant management
+//
+// Each Study is a value kept in the studyIndex map from studyIds to studies.
+type Study struct {
+	Id         string
+	Name       string
+	AdminEmail string
+	Active     bool
 }
 
-func (s *StudyPolicies) StoragePrefix() string {
-	return "study-policies"
-}
-func (s *StudyPolicies) StorageId() string {
-	return "study-policies"
-}
-func (s *StudyPolicies) ToRedis() ([]byte, error) {
+func (s *Study) ToRedis() ([]byte, error) {
 	var b bytes.Buffer
 	if err := gob.NewEncoder(&b).Encode(s); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
 }
-func (s *StudyPolicies) FromRedis(b []byte) error {
+func (s *Study) FromRedis(b []byte) error {
+	*s = Study{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
 var (
-	DefaultStudyPolicies = StudyPolicies{false, true, true}
-	currentStudyPolicies = DefaultStudyPolicies
+	// the global map from a study's id to its study object
+	studyIndex = platform.StorableMap("study-index")
 )
 
-func loadPoliciesConfigAction() {
-	ctx := context.Background()
-	var s StudyPolicies
-	err := platform.LoadObject(ctx, &s)
-	if err == nil {
-		currentStudyPolicies = s
-		return
+func (s *Study) Save() error {
+	b, err := s.ToRedis()
+	if err != nil {
+		sLog().Error("serialization failure on study", zap.String("studyId", s.Id), zap.Error(err))
+		return err
 	}
-	// presumably they've never been set, so use the defaults
-	if !errors.Is(err, platform.NotFoundError) {
-		// warn if we really had a database failure
-		sLog().Error("db failure loading study policies", zap.Error(err))
+	if err := platform.MapSet(sCtx(), studyIndex, s.Id, string(b)); err != nil {
+		sLog().Error("map set failure on study save", zap.String("studyId", s.Id), zap.Error(err))
+		return err
 	}
-	currentStudyPolicies = DefaultStudyPolicies
-	if err = platform.SaveObject(ctx, &currentStudyPolicies); err != nil {
-		// warn on database failure
-		sLog().Error("db failure on study policies save", zap.Error(err))
-	}
+	return nil
 }
 
-func init() {
-	platform.RegisterForConfigChange("study-policies", loadPoliciesConfigAction)
-}
-
-func GetStudyPolicies() StudyPolicies {
-	p := currentStudyPolicies
-	return p
-}
-
-func SetStudyPolicies(p StudyPolicies) {
-	currentStudyPolicies = p
-	if err := platform.SaveObject(sCtx(), &currentStudyPolicies); err != nil {
-		sLog().Error("db failure on study policies save", zap.Error(err))
+func GetStudy(id string) (*Study, error) {
+	val, err := platform.MapGet(sCtx(), studyIndex, id)
+	if err != nil {
+		sLog().Error("map get failure on study lookup", zap.String("studyId", id), zap.Error(err))
+		return nil, err
 	}
+	if val == "" {
+		return nil, nil
+	}
+	var s Study
+	if err := s.FromRedis([]byte(val)); err != nil {
+		sLog().Error("db failure on study fetch", zap.String("studyId", id), zap.Error(err))
+		return nil, err
+	}
+	return &s, nil
+}
+
+func GetAllStudyIds() ([]string, error) {
+	keys, err := platform.MapGetKeys(sCtx(), studyIndex)
+	if err != nil {
+		sLog().Error("map get failure on fetch of all study ids", zap.Error(err))
+	}
+	return keys, nil
+}
+
+func GetAllStudies() ([]*Study, error) {
+	result := make([]*Study, 0, len(studyIndex))
+	m, err := platform.MapGetAll(sCtx(), studyIndex)
+	if err != nil {
+		sLog().Error("map get failure on fetch of all studies", zap.Error(err))
+		return nil, err
+	}
+	for _, val := range m {
+		var s Study
+		if err := s.FromRedis([]byte(val)); err != nil {
+			sLog().Error("deserialization failure on study ", zap.String("studyId", s.Id), zap.Error(err))
+		}
+		result = append(result, &s)
+	}
+	return result, nil
+}
+
+// DeleteStudy will delete everything, including all stats! Be careful!
+func DeleteStudy(studyId string) error {
+	// first make sure there are no active participants
+	participants, err := GetAllStudyParticipants(studyId)
+	if err != nil {
+		return err
+	}
+	for _, p := range participants {
+		if p.Started > 0 && p.Finished == 0 {
+			return ParticipantInUseError
+		}
+	}
+	// next delete all the phrase stats for the participants
+	if err = platform.DeleteStorage(sCtx(), PhraseStatsIndex(studyId)); err != nil {
+		sLog().Error("db failure on phrase stats delete",
+			zap.String("studyId", studyId), zap.Error(err))
+		return err
+	}
+	// next delete all the line stats for the participants
+	for _, p := range participants {
+		if err = platform.DeleteStorage(sCtx(), StudyTypedLineStatsIndex(studyId+"+"+p.Upn)); err != nil {
+			sLog().Error("db failure on typed line stats delete",
+				zap.String("studyId", studyId), zap.String("upn", p.Upn), zap.Error(err))
+			return err
+		}
+	}
+	// finally, delete all the participants
+	if err = platform.DeleteStorage(sCtx(), ParticipantIndex(studyId)); err != nil {
+		sLog().Error("db failure on delete of participants",
+			zap.String("studyId", studyId), zap.Error(err))
+	}
+	return nil
+}
+
+// The ParticipantIndex of a studyId maps from UPN to StudyParticipant.
+type ParticipantIndex string
+
+func (i ParticipantIndex) StoragePrefix() string {
+	return "study-members:"
+}
+func (i ParticipantIndex) StorageId() string {
+	return string(i)
 }
 
 type StudyParticipant struct {
 	Upn       string
+	StudyId   string
 	Memo      string
 	Assigned  int64
 	ProfileId string
@@ -98,15 +160,6 @@ type StudyParticipant struct {
 	VoiceName string
 }
 
-func (s *StudyParticipant) StoragePrefix() string {
-	return "study-participant:"
-}
-func (s *StudyParticipant) StorageId() string {
-	if s == nil {
-		return ""
-	}
-	return s.Upn
-}
 func (s *StudyParticipant) ToRedis() ([]byte, error) {
 	var b bytes.Buffer
 	if err := gob.NewEncoder(&b).Encode(s); err != nil {
@@ -117,6 +170,18 @@ func (s *StudyParticipant) ToRedis() ([]byte, error) {
 func (s *StudyParticipant) FromRedis(b []byte) error {
 	*s = StudyParticipant{} // dump old data
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
+}
+
+func (s *StudyParticipant) save() error {
+	b, err := s.ToRedis()
+	if err != nil {
+		sLog().Error("serialization failure on participant", zap.String("studyId", s.StudyId), zap.Error(err))
+		return err
+	}
+	if err := platform.MapSet(sCtx(), ParticipantIndex(s.StudyId), s.Upn, string(b)); err != nil {
+		sLog().Error("map set failure on participant save", zap.String("studyId", s.StudyId), zap.Error(err))
+	}
+	return nil
 }
 
 func (s *StudyParticipant) UpdateApiKey(apiKey string) (bool, error) {
@@ -131,9 +196,7 @@ func (s *StudyParticipant) UpdateApiKey(apiKey string) (bool, error) {
 		}
 		s.ApiKey = apiKey
 	}
-	if err := platform.SaveObject(sCtx(), s); err != nil {
-		sLog().Error("db failure on participant save",
-			zap.String("studyId", s.Upn), zap.Error(err))
+	if err := s.save(); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -151,9 +214,7 @@ func (s *StudyParticipant) UpdateVoiceId(voiceId string) (bool, error) {
 	}
 	s.VoiceId = voiceId
 	s.VoiceName = name
-	if err := platform.SaveObject(sCtx(), s); err != nil {
-		sLog().Error("db failure on participant save",
-			zap.String("studyId", s.Upn), zap.Error(err))
+	if err := s.save(); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -164,29 +225,35 @@ func (s *StudyParticipant) UpdateAssignment(memo string) error {
 	if s.Assigned == 0 {
 		s.Assigned = time.Now().UnixMilli()
 	}
-	if err := platform.SaveObject(sCtx(), s); err != nil {
-		sLog().Error("db failure on participant save",
-			zap.String("studyId", s.Upn), zap.Error(err))
+	if err := s.save(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func GetStudyParticipant(upn string) (*StudyParticipant, error) {
-	s := &StudyParticipant{Upn: upn}
-	if err := platform.LoadObject(sCtx(), s); err != nil {
-		if errors.Is(err, platform.NotFoundError) {
-			return nil, nil
-		}
-		sLog().Error("db failure on participant fetch",
-			zap.String("studyId", upn), zap.Error(err))
+func GetStudyParticipant(studyId, upn string) (*StudyParticipant, error) {
+	val, err := platform.MapGet(sCtx(), ParticipantIndex(studyId), upn)
+	if err != nil {
+		sLog().Error("map get failure on participant lookup",
+			zap.String("studyId", studyId), zap.String("upn", upn), zap.Error(err))
 		return nil, err
 	}
-	return s, nil
+	if val == "" {
+		return nil, nil
+	}
+	var s StudyParticipant
+	if err := s.FromRedis([]byte(val)); err != nil {
+		sLog().Error("db failure on participant fetch",
+			zap.String("studyId", studyId), zap.String("upn", upn), zap.Error(err))
+		return nil, err
+	}
+	return &s, nil
 }
 
-func DeleteStudyParticipant(upn string) error {
-	s, err := GetStudyParticipant(upn)
+// DeleteStudyParticipant should be used with caution because it will also delete
+// any collected line stats for this participant.
+func DeleteStudyParticipant(studyId, upn string) error {
+	s, err := GetStudyParticipant(studyId, upn)
 	if err != nil {
 		return err
 	}
@@ -196,41 +263,48 @@ func DeleteStudyParticipant(upn string) error {
 	if s.Started > 0 && s.Finished == 0 {
 		return ParticipantInUseError
 	}
-	if err = platform.DeleteStorage(sCtx(), s); err != nil {
+	if err = platform.MapRemove(sCtx(), ParticipantIndex(studyId), upn); err != nil {
 		sLog().Error("db failure on participant delete",
-			zap.String("studyId", upn), zap.Error(err))
+			zap.String("studyId", studyId), zap.String("upn", upn), zap.Error(err))
 		return err
+	}
+	if err = platform.DeleteStorage(sCtx(), StudyTypedLineStatsIndex(studyId+"+"+upn)); err != nil {
+		sLog().Error("db failure on typed line stats delete",
+			zap.String("studyId", studyId), zap.String("upn", upn), zap.Error(err))
 	}
 	return nil
 }
 
-func GetAllStudyParticipants() ([]*StudyParticipant, error) {
-	var s StudyParticipant
-	var result []*StudyParticipant
-	collect := func() error {
-		n := s
-		result = append(result, &n)
-		return nil
-	}
-	if err := platform.MapObjects(sCtx(), collect, &s); err != nil {
-		sLog().Error("db failure on participant map", zap.Error(err))
+func GetAllStudyParticipants(studyId string) ([]*StudyParticipant, error) {
+	m, err := platform.MapGetAll(sCtx(), ParticipantIndex(studyId))
+	if err != nil {
+		sLog().Error("db failure fetching participants",
+			zap.String("studyId", studyId), zap.Error(err))
 		return nil, err
 	}
-	return result, nil
+	results := make([]*StudyParticipant, 0, len(m))
+	for _, val := range m {
+		var s StudyParticipant
+		if err = s.FromRedis([]byte(val)); err != nil {
+			sLog().Error("deserialization failure on participant ",
+				zap.String("studyId", studyId), zap.String("upn", s.Upn), zap.Error(err))
+			return nil, err
+		}
+		results = append(results, &s)
+	}
+	return results, nil
 }
 
-func CreateStudyParticipant(upn string) (*StudyParticipant, error) {
-	existing, err := GetStudyParticipant(upn)
+func CreateStudyParticipant(studyId, upn string) (*StudyParticipant, error) {
+	existing, err := GetStudyParticipant(studyId, upn)
 	if err != nil {
 		return nil, err
 	}
 	if existing != nil {
 		return nil, ParticipantAlreadyExistsError
 	}
-	p := &StudyParticipant{Upn: upn}
-	if err = platform.SaveObject(sCtx(), p); err != nil {
-		sLog().Error("db failure on participant creation",
-			zap.String("studyId", upn), zap.Error(err))
+	p := &StudyParticipant{Upn: upn, StudyId: studyId}
+	if err = p.save(); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -244,19 +318,21 @@ var (
 	ParticipantInUseError         = errors.New("participant UPN is in use in the app")
 )
 
-func GetProfileStudyMembership(profileId string) (string, error) {
-	upn, err := platform.MapGet(sCtx(), profileParticipantMap, profileId)
+func GetProfileStudyMembership(profileId string) (studyId string, upn string, err error) {
+	var id string
+	id, err = platform.MapGet(sCtx(), profileParticipantMap, profileId)
 	if err != nil {
 		sLog().Error("map get failure on profile lookup",
 			zap.String("profileId", profileId), zap.Error(err))
-		return "", err
+		return
 	}
-	return upn, nil
+	studyId, upn, _ = strings.Cut(id, "+")
+	return
 }
 
-func EnrollStudyParticipant(profileId, upn string) (settings, apiKey string, err error) {
+func EnrollStudyParticipant(profileId, studyId, upn string) (settings, apiKey string, err error) {
 	var p *StudyParticipant
-	p, err = GetStudyParticipant(upn)
+	p, err = GetStudyParticipant(studyId, upn)
 	if err != nil {
 		return
 	}
@@ -266,7 +342,7 @@ func EnrollStudyParticipant(profileId, upn string) (settings, apiKey string, err
 	}
 	if p.Assigned == 0 {
 		sLog().Info("auto-assigning participant",
-			zap.String("studyId", upn), zap.String("profileId", profileId))
+			zap.String("studyId", studyId), zap.String("upn", upn), zap.String("profileId", profileId))
 		p.Assigned = time.Now().UnixMilli()
 		p.Memo = "in-app"
 	}
@@ -280,14 +356,12 @@ func EnrollStudyParticipant(profileId, upn string) (settings, apiKey string, err
 		err = ParticipantNotAvailableError
 		return
 	}
-	if err = platform.SaveObject(sCtx(), p); err != nil {
-		sLog().Error("db failure on participant save",
-			zap.String("studyId", upn), zap.Error(err))
+	if err = p.save(); err != nil {
 		return
 	}
-	if err = platform.MapSet(sCtx(), profileParticipantMap, profileId, upn); err != nil {
+	if err = platform.MapSet(sCtx(), profileParticipantMap, profileId, studyId+"+"+upn); err != nil {
 		sLog().Error("map set failure on participant assignment",
-			zap.String("profileId", profileId), zap.String("studyId", upn),
+			zap.String("profileId", profileId), zap.String("studyId", studyId), zap.String("upn", upn),
 			zap.Error(err))
 		return
 	}
@@ -296,8 +370,8 @@ func EnrollStudyParticipant(profileId, upn string) (settings, apiKey string, err
 	return
 }
 
-func UnenrollStudyParticipant(profileId string, upn string) error {
-	p, err := GetStudyParticipant(upn)
+func UnenrollStudyParticipant(profileId string, studyId, upn string) error {
+	p, err := GetStudyParticipant(studyId, upn)
 	if err != nil {
 		return err
 	}
@@ -308,14 +382,12 @@ func UnenrollStudyParticipant(profileId string, upn string) error {
 		return ParticipantNotValidError
 	}
 	p.Finished = time.Now().UnixMilli()
-	if err = platform.SaveObject(sCtx(), p); err != nil {
-		sLog().Error("db failure on participant save",
-			zap.String("studyId", upn), zap.Error(err))
+	if err = p.save(); err != nil {
 		return err
 	}
-	if err := platform.MapRemove(sCtx(), profileParticipantMap, profileId); err != nil {
+	if err = platform.MapRemove(sCtx(), profileParticipantMap, profileId); err != nil {
 		sLog().Error("map remove failure on participant unassignment",
-			zap.String("profileId", profileId), zap.String("studyId", upn),
+			zap.String("profileId", profileId), zap.String("studyId", studyId), zap.String("upn", upn),
 			zap.Error(err))
 		return err
 	}
@@ -334,6 +406,20 @@ const (
 
 var PlatformNames = []string{"Unknown", "Phone", "Tablet", "Computer", "Browser"}
 
+// A StudyTypedLineStatsIndex is a study's map from UPN to the list of TypedLineStat values for that participant.
+//
+// Rather than keeping this as a hash table keyed by UPN, where each value is a list, we instead keep each list
+// as a Redis list and use <studyId>+<UPN> as the Redis key for that value. This allows us to use the Redis
+// list commands to efficiently push new stats
+type StudyTypedLineStatsIndex string
+
+func (i StudyTypedLineStatsIndex) StoragePrefix() string {
+	return "typed-line-stat-list:"
+}
+func (i StudyTypedLineStatsIndex) StorageId() string {
+	return string(i)
+}
+
 // TypedLineStat records statistics for a single line typed by a study participant.
 //
 // If Changes and Duration are both zero, it means the line was a repeat, in which
@@ -349,51 +435,39 @@ type TypedLineStat struct {
 	From      Platform
 }
 
-func (t *TypedLineStat) ToRedis() ([]byte, error) {
+func (s *TypedLineStat) ToRedis() ([]byte, error) {
 	var b bytes.Buffer
-	if err := gob.NewEncoder(&b).Encode(t); err != nil {
+	if err := gob.NewEncoder(&b).Encode(s); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
 }
-func (t *TypedLineStat) FromRedis(b []byte) error {
-	*t = TypedLineStat{} // clear old data
-	return gob.NewDecoder(bytes.NewReader(b)).Decode(t)
+func (s *TypedLineStat) FromRedis(b []byte) error {
+	*s = TypedLineStat{} // clear old data
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
-// The TypedLineStatList is keyed by UPN and is the list of all typed lines from that user.
-//
-// It's a StringList, but each member is a TypedLineStat value.
-type TypedLineStatList string
-
-func (t TypedLineStatList) StoragePrefix() string {
-	return "typed-line-stat-list:"
-}
-func (t TypedLineStatList) StorageId() string {
-	return string(t)
-}
-
-func (t TypedLineStatList) PushRange(stats []TypedLineStat) error {
+func (i StudyTypedLineStatsIndex) PushRange(stats []TypedLineStat) error {
 	vals := make([]string, 0, len(stats))
 	for _, s := range stats {
 		v, err := s.ToRedis()
 		if err != nil {
 			sLog().Error("db failure on typed line stat encode",
-				zap.String("studyId", string(t)), zap.Any("stat", s), zap.Error(err))
+				zap.String("studyId", string(i)), zap.Any("stat", s), zap.Error(err))
 			return err
 		}
 		vals = append(vals, string(v))
 	}
-	if err := platform.PushRange(sCtx(), t, false, vals...); err != nil {
+	if err := platform.PushRange(sCtx(), i, false, vals...); err != nil {
 		sLog().Error("db failure on typed line stat push range",
-			zap.String("studyId", string(t)), zap.Error(err))
+			zap.String("studyId", string(i)), zap.Error(err))
 		return err
 	}
 	return nil
 }
 
-func FetchTypedLineStats(upn string, startDate, endDate int64) ([]TypedLineStat, error) {
-	vals, err := platform.FetchRange(sCtx(), TypedLineStatList(upn), 0, -1)
+func FetchTypedLineStats(studyId, upn string, startDate, endDate int64) ([]TypedLineStat, error) {
+	vals, err := platform.FetchRange(sCtx(), StudyTypedLineStatsIndex(studyId+"+"+upn), 0, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -411,11 +485,11 @@ func FetchTypedLineStats(upn string, startDate, endDate int64) ([]TypedLineStat,
 	return stats, nil
 }
 
-func FetchAllTypedLineStats(start int64, end int64, studyOnly bool, upns []string) ([][]TypedLineStat, error) {
+func FetchAllTypedLineStats(studyId string, start int64, end int64, upns []string) ([][]TypedLineStat, error) {
 	var stats [][]TypedLineStat
 	if len(upns) > 0 {
 		for _, upn := range upns {
-			stat, err := FetchTypedLineStats(upn, start, end)
+			stat, err := FetchTypedLineStats(studyId, upn, start, end)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch line stats for %q: %w", upn, err)
 			}
@@ -424,101 +498,111 @@ func FetchAllTypedLineStats(start int64, end int64, studyOnly bool, upns []strin
 			}
 		}
 	} else {
-		mapper := func(upn string) error {
-			if studyOnly && strings.HasPrefix(upn, "NS:") {
-				return nil
-			}
-			stat, err := FetchTypedLineStats(upn, start, end)
+		upns, err := platform.FetchRange(sCtx(), ParticipantIndex(studyId), 0, -1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch study members: %w", err)
+		}
+		for _, upn := range upns {
+			stat, err := FetchTypedLineStats(studyId, upn, start, end)
 			if err != nil {
-				return err
+				return nil, fmt.Errorf("failed to fetch line stats: %w", err)
 			}
 			if len(stat) == 0 {
-				return nil
+				continue
 			}
 			stats = append(stats, stat)
-			return nil
-		}
-		if err := platform.MapKeys(sCtx(), mapper, TypedLineStatList("")); err != nil {
-			return nil, fmt.Errorf("failed to fetch line stats: %w", err)
 		}
 	}
 	return stats, nil
 }
 
-// CannedLineStat records the usage of pre-typed lines (favorites and repeats).
-type CannedLineStat struct {
+// A PhraseStat records the usage of a pre-typed phrase (favorites and repeats).
+type PhraseStat struct {
 	Hash          string // NV1a hash of lowercased content in base32
 	Content       string // Content of canned line
 	FavoriteCount int64  // Count of uses as a favorite
 	RepeatCount   int64  // Count of uses as a repeat
 }
 
-func (c *CannedLineStat) StoragePrefix() string {
-	return "canned-line-stat:"
-}
-func (c *CannedLineStat) StorageId() string {
-	return c.Hash
-}
-func (c *CannedLineStat) ToRedis() ([]byte, error) {
+func (s *PhraseStat) ToRedis() ([]byte, error) {
 	var b bytes.Buffer
-	if err := gob.NewEncoder(&b).Encode(c); err != nil {
+	if err := gob.NewEncoder(&b).Encode(s); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
 }
-func (c *CannedLineStat) FromRedis(b []byte) error {
-	*c = CannedLineStat{} // clear existing data
-	return gob.NewDecoder(bytes.NewReader(b)).Decode(c)
+func (s *PhraseStat) FromRedis(b []byte) error {
+	*s = PhraseStat{} // clear existing data
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
+}
+
+// The PhraseStatsIndex of a study ID maps from phrase hash to PhraseStat.
+type PhraseStatsIndex string
+
+func (i PhraseStatsIndex) StoragePrefix() string {
+	return "study-members:"
+}
+func (i PhraseStatsIndex) StorageId() string {
+	return string(i)
 }
 
 var whitespace = regexp.MustCompile(`\s+`)
 
-func GetOrCreateCannedLineStat(text string, inStudy bool) (*CannedLineStat, error) {
+func GetOrCreatePhraseStat(studyId, text string) (*PhraseStat, error) {
 	text = strings.ToLower(whitespace.ReplaceAllLiteralString(strings.TrimSpace(text), " "))
 	hasher := fnv.New64a()
 	_, _ = hasher.Write([]byte(text))
 	hash := strconv.FormatUint(hasher.Sum64(), 32)
-	if currentStudyPolicies.SeparateNonStudyRepeatStats && !inStudy {
-		hash = "NS:" + hash
-	}
-	c := &CannedLineStat{Hash: hash}
-	if err := platform.LoadObject(sCtx(), c); err != nil {
-		if errors.Is(err, platform.NotFoundError) {
-			return &CannedLineStat{Hash: hash, Content: text}, nil
-		}
-		sLog().Error("db failure on canned line stat fetch",
-			zap.String("hash", hash), zap.Error(err))
+	val, err := platform.MapGet(sCtx(), PhraseStatsIndex(studyId), hash)
+	if err != nil {
+		sLog().Error("map get failure on canned line stat lookup",
+			zap.String("studyId", studyId), zap.String("hash", hash), zap.Error(err))
 		return nil, err
 	}
-	if c.Content != text {
-		sLog().Info("hash collision on canned line stat",
-			zap.String("hash", c.Hash),
-			zap.String("existing", c.Content), zap.String("ignored", text))
+	if val == "" {
+		return &PhraseStat{Hash: hash, Content: text}, nil
 	}
-	return c, nil
+	var s PhraseStat
+	if err := s.FromRedis([]byte(val)); err != nil {
+		sLog().Error("deserialization failure on canned line stat",
+			zap.String("studyId", studyId), zap.String("hash", hash), zap.Error(err))
+		return nil, err
+	}
+	if s.Content != text {
+		sLog().Info("hash collision on canned line stat",
+			zap.String("hash", s.Hash),
+			zap.String("existing", s.Content), zap.String("ignored", text))
+	}
+	return &s, nil
 }
 
-func SaveCannedLineStat(c *CannedLineStat) error {
-	if err := platform.SaveObject(sCtx(), c); err != nil {
+func SavePhraseStat(studyId string, s *PhraseStat) error {
+	b, err := s.ToRedis()
+	if err != nil {
+		sLog().Error("serialization failure on canned line stat",
+			zap.String("studyId", studyId), zap.String("hash", s.Hash), zap.Error(err))
+		return err
+	}
+	if err := platform.MapSet(sCtx(), PhraseStatsIndex(studyId), s.Hash, string(b)); err != nil {
 		sLog().Error("db failure on canned line stat save",
-			zap.String("hash", c.Hash), zap.Error(err))
+			zap.String("studyId", studyId), zap.String("hash", s.Hash), zap.Error(err))
 		return err
 	}
 	return nil
 }
 
-func FetchAllCannedLineStats(studyOnly bool) ([]CannedLineStat, error) {
-	var result []CannedLineStat
-	var s CannedLineStat
-	collect := func() error {
-		if studyOnly && strings.HasPrefix(s.Hash, "NS:") {
-			return nil
+func FetchAllPhraseStats(studyId string) ([]PhraseStat, error) {
+	m, err := platform.MapGetAll(sCtx(), PhraseStatsIndex(studyId))
+	if err != nil {
+		return nil, fmt.Errorf("db failure fetch stats map: %w", err)
+	}
+	result := make([]PhraseStat, 0, len(m))
+	for _, v := range m {
+		var s PhraseStat
+		if err := s.FromRedis([]byte(v)); err != nil {
+			return nil, fmt.Errorf("deserialization failure on canned line stat: %w", err)
 		}
 		result = append(result, s)
-		return nil
-	}
-	if err := platform.MapObjects(sCtx(), collect, &s); err != nil {
-		return nil, err
 	}
 	return result, nil
 }

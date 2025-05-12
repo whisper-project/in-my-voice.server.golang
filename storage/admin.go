@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
 	"go.uber.org/zap"
@@ -49,6 +50,7 @@ var (
 type AdminUser struct {
 	Id          string
 	Email       string
+	StudyId     string
 	RoleStorage string
 }
 
@@ -73,8 +75,8 @@ func (u *AdminUser) FromRedis(data []byte) error {
 	return gob.NewDecoder(bytes.NewReader(data)).Decode(u)
 }
 
-func NewAdminUser(email string) *AdminUser {
-	return &AdminUser{Id: uuid.NewString(), Email: email}
+func NewAdminUser(email, studyId string) *AdminUser {
+	return &AdminUser{Id: uuid.NewString(), Email: email, StudyId: studyId}
 }
 
 func (u *AdminUser) HasRole(role AdminRole) bool {
@@ -171,40 +173,41 @@ func EnsureSuperAdmin(email string) error {
 		return err
 	}
 	if u == nil {
-		u = NewAdminUser(email)
-		u.SetRoles([]AdminRole{AdminRoleSuperAdmin})
-		if err := SaveAdminUser(u); err != nil {
-			return err
-		}
+		u = NewAdminUser(email, "")
+	}
+	u.SetRoles([]AdminRole{AdminRoleSuperAdmin})
+	if err := SaveAdminUser(u); err != nil {
+		return err
 	}
 	return nil
 }
 
-func DeleteSuperAdmin(email string) error {
-	users, err := GetAllAdminUsers()
+func EnsureStudyAdminUser(studyId, email string) error {
+	u, err := LookupAdminUser(email)
 	if err != nil {
 		return err
 	}
-	var toDelete string
-	var keepCount int
-	for _, u := range users {
-		if u.HasRole(AdminRoleSuperAdmin) {
-			if u.Email == email {
-				toDelete = u.Id
-			} else {
-				keepCount++
-			}
-		}
+	if u == nil {
+		u = NewAdminUser(email, studyId)
+	} else if u.StudyId != studyId {
+		return fmt.Errorf("admin %s is associated with a different study", email)
 	}
-	if keepCount == 0 {
-		sLog().Info("super admin delete would leave none", zap.String("email", email))
-		return ParticipantNotAvailableError
+	u.SetRoles([]AdminRole{AdminRoleUserManager, AdminRoleParticipantManager, AdminRoleResearcher})
+	if err := SaveAdminUser(u); err != nil {
+		return err
 	}
-	if toDelete == "" {
-		sLog().Info("no such super admin to delete", zap.String("email", email))
+	return nil
+}
+
+func DeleteSuperAdmin(id string) error {
+	user, err := GetAdminUser(id)
+	if err != nil {
+		return err
+	}
+	if !user.HasRole(AdminRoleSuperAdmin) {
 		return ParticipantNotValidError
 	}
-	return DeleteAdminUser(toDelete)
+	return DeleteAdminUser(id)
 }
 
 // A sessionId is an expiring key whose value is the user id in the session.

@@ -1,0 +1,80 @@
+{{ define "admin/studies.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {{ template "admin/header.tmpl.html" }}
+    <title>InMyVoice Study Administration</title>
+</head>
+<body>
+<h1>InMyVoice - Study Administration</h1>
+<p style="color: red;">{{ .Message }}</p>
+<h2>Studies</h2>
+{{ if .Studies }}
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Administrator</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {{ range .Studies }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td>{{ .Email }}</td>
+                <td><a href="?edit={{ .Id }}">Edit</a>, <a href="?delete={{ .Id }}">Delete</a></td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+{{ else }}
+<p>No studies.</p>
+{{ end }}
+{{ if .Edit }}
+    <h3>Edit Study</h3>
+    <form action="./studies" method="POST">
+        <input type="hidden" name="op" value="edit" />
+        <input type="hidden" name="id" value="{{ .Edit.Id }}" />
+        <div class="form-control width-500">
+            <label for="name">Study name:</label>
+            <input type="text" id="name" name="name" size="50" value="{{ .Edit.Name }}" required />
+        </div>
+        <div class="form-control width-500">
+            <label for="email">Administrator email:</label>
+            <input type="email" id="email" name="email" size="50" value="{{ .Edit.Email }}" required />
+        </div>
+        <div class="form-control width-500">
+            <button type="submit">Save Changes</button>
+            <button type="button" onclick="window.location.href='./studies'">Cancel</button>
+        </div>
+    </form>
+{{ else }}
+    <h3>Add Study</h3>
+    <form action="./studies" method="POST">
+        <input type="hidden" name="op" value="add" />
+        <input type="hidden" name="id" value="" />
+        <div class="form-control width-500">
+            <label for="name">Study name:</label>
+            <input type="text" id="name" name="name" size="50" required />
+        </div>
+        <div class="form-control width-500">
+            <label for="email">Administrator email:</label>
+            <input type="email" id="email" name="email" size="50" required />
+        </div>
+        <div class="form-control width-500">
+            <button type="submit">Add Study</button>
+            <button type="button" onclick="window.location.href='./studies'">Cancel</button>
+        </div>
+    </form>
+{{ end }}
+{{ template "admin/footer.tmpl.html" }}
+</body>
+</html>
+{{ end }}

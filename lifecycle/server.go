@@ -26,7 +26,7 @@ import (
 // Startup takes a configured router and runs a server instance with it as a handler.
 // The instance is configured so that it can be exited cleanly.
 //
-// This code is based on [this example](https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-with-context/server.go)
+// This code is based on [this example](https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-with-context/admins.go)
 func Startup(router *gin.Engine, hostPort string) {
 	// Create context that listens for the interrupt signal from the OS.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

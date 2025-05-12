@@ -1,0 +1,56 @@
+{{ define "admin/home.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {{ template "admin/header.tmpl.html" }}
+    <title>InMyVoice Administration</title>
+</head>
+<body>
+<h1>InMyVoice - Administration</h1>
+<p></p>
+{{ if .Roles.developer }}
+    <h2>Server Management</h2>
+    <button onclick="window.location.href='./admins'">Manage Admins</button>
+    <p></p>
+    <button onclick="window.location.href='./studies'">Manage Studies</button>
+    <p></p>
+    <h2>Study Management</h2>
+    <p></p>
+    {{ if .StudyOptions }}
+        <form action="./home" method="POST">
+            <div class="form-control width-250">
+                <button type="submit">Set Study</button>
+                <select id="study" name="study">
+                    {{ range .StudyOptions }}
+                        <option value="{{ .Id }}" {{ if .Selected }}selected{{ end }}>{{ .Name }}</option>
+                    {{ end }}
+                </select>
+            </div>
+        </form>
+    {{ else }}
+        <p style="color: red;">There are no studies. Please create one.</p>
+    {{ end }}
+    <p></p>
+{{ end }}
+{{ if .Roles.userManager }}
+    <button onclick="window.location.href='./users'">Manage Users</button>
+    <p></p>
+{{ end }}
+{{ if .Roles.participantManager }}
+    <button onclick="window.location.href='./participants'">Manage Participants</button>
+    <p></p>
+{{ end }}
+{{ if .Roles.researcher }}
+    <button onclick="window.location.href='./reports'">Manage Reports</button>
+    <p></p>
+{{ end }}
+{{ template "admin/footer.tmpl.html" }}
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,66 @@
+{{ define "admin/admins.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {{ template "admin/header.tmpl.html" }}
+    <title>InMyVoice Administrator Management</title>
+</head>
+<body>
+<h1>InMyVoice - Administrator Management</h1>
+<p style="color: red;">{{ .Message }}</p>
+<h2>Administrators</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{ range .Users }}
+        <tr>
+            <td>{{ .Email }}</td>
+            <td><a href="?edit={{ .Id }}">Edit</a>, <a href="?delete={{ .Id }}">Delete</a></td>
+        </tr>
+    {{ end }}
+    </tbody>
+</table>
+{{ if .Edit }}
+    <h3>Edit Administrator</h3>
+    <form action="./admins" method="POST">
+        <input type="hidden" name="op" value="edit" />
+        <input type="hidden" name="id" value="{{ .Edit.Id }}" />
+        <div class="form-control width-500">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" size="50" value="{{ .Edit.Email }}" required />
+        </div>
+        <div class="form-control width-500">
+            <button type="submit">Save Changes</button>
+            <button type="button" onclick="window.location.href='./admins'">Cancel</button>
+        </div>
+    </form>
+{{ else }}
+    <h3>Add Administrator</h3>
+    <form action="./admins" method="POST">
+        <input type="hidden" name="op" value="add" />
+        <input type="hidden" name="id" value="" />
+        <div class="form-control width-500">
+            <label for="email">Email:</label>
+            <input type="text" id="email" name="email" size="50" value="" required />
+        </div>
+        <div class="form-control width-500">
+            <button type="submit">Add Admin</button>
+            <button type="button" onclick="window.location.href='./admins'">Cancel</button>
+        </div>
+    </form>
+{{ end }}
+{{ template "admin/footer.tmpl.html" }}
+</body>
+</html>
+{{ end }}

@@ -316,6 +316,11 @@ func TestOrmTestMap(t *testing.T) {
 	}
 
 	// Retrieve all elements and validate their values
+	if allKeys, err := MapGetKeys(ctx, ormTestMap); err != nil {
+		t.Errorf("MapGetKeys failed: %v", err)
+	} else if len(allKeys) != 2 || allKeys[0] != key || allKeys[1] != anotherKey {
+		t.Errorf("MapGetKeys returned unexpected results: %v", allKeys)
+	}
 	if allElements, err := MapGetAll(ctx, ormTestMap); err != nil {
 		t.Errorf("MapGetAll failed: %v", err)
 	} else if len(allElements) != 2 || allElements[key] != value || allElements[anotherKey] != anotherValue {

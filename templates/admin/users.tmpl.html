@@ -14,7 +14,7 @@
 <body>
 <h1>InMyVoice - User Administration</h1>
 <p style="color: red;">{{ .Message }}</p>
-<h2>Users</h2>
+<h2>{{ .Study }} Users</h2>
 {{ if .Users }}
 <table>
     <thead>
@@ -43,7 +43,7 @@
         <input type="hidden" name="id" value="{{ .Edit.Id }}" />
         <div class="form-control width-500">
             <label for="email">Email:</label>
-            <input type="text" id="email" name="email" size="50" value="{{ .Edit.Email }}" required />
+            <input type="email" id="email" name="email" size="50" value="{{ .Edit.Email }}" required />
         </div>
         <fieldset class="width-500">
             <legend>Roles:</legend>
