@@ -18,8 +18,8 @@ import (
 )
 
 func AnomalyHandler(c *gin.Context) {
-	clientId := c.GetHeader("X-Client-ReportId")
-	profileId := c.GetHeader("X-Profile-ReportId")
+	clientId := c.GetHeader("X-Client-Id")
+	profileId := c.GetHeader("X-Profile-Id")
 	clientType := c.GetHeader("X-Client-Type")
 	message := c.Param("message")
 	middleware.CtxLog(c).Info("Anomaly reported",
@@ -88,8 +88,8 @@ func ShutdownHandler(c *gin.Context) {
 }
 
 func ValidateRequest(c *gin.Context) (clientId, profileId string, ok bool) {
-	clientId = c.GetHeader("X-Client-ReportId")
-	profileId = c.GetHeader("X-Profile-ReportId")
+	clientId = c.GetHeader("X-Client-Id")
+	profileId = c.GetHeader("X-Profile-Id")
 	if uuid.Validate(clientId) != nil || uuid.Validate(profileId) != nil {
 		middleware.CtxLog(c).Info("Invalid client or profile ID",
 			zap.String("clientId", clientId), zap.String("profileId", profileId))

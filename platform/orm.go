@@ -103,6 +103,8 @@ func DeleteStorage[T RedisKey](ctx context.Context, obj T) error {
 	return nil
 }
 
+// String-valued keys
+
 func FetchString[T RedisKey](ctx context.Context, obj T) (string, error) {
 	db, prefix := GetDb()
 	key := prefix + obj.StoragePrefix() + obj.StorageId()
@@ -126,6 +128,8 @@ func StoreString[T RedisKey](ctx context.Context, obj T, val string) error {
 	}
 	return nil
 }
+
+// Plain old sets
 
 func FetchMembers[T RedisKey](ctx context.Context, obj T) ([]string, error) {
 	db, prefix := GetDb()
@@ -183,6 +187,8 @@ func RemoveMembers[T RedisKey](ctx context.Context, obj T, members ...string) er
 	return nil
 }
 
+// Scored Sets
+
 func FetchRangeInterval[T RedisKey](ctx context.Context, obj T, start, end int64) ([]string, error) {
 	db, prefix := GetDb()
 	key := prefix + obj.StoragePrefix() + obj.StorageId()
@@ -234,6 +240,8 @@ func GetMemberScore[T RedisKey](ctx context.Context, obj T, member string) (floa
 	}
 	return res.Val(), nil
 }
+
+// Lists
 
 func FetchRange[T RedisKey](ctx context.Context, obj T, start int64, end int64) ([]string, error) {
 	db, prefix := GetDb()
@@ -305,6 +313,8 @@ func RemoveElement[T RedisKey](ctx context.Context, obj T, count int64, element 
 	}
 	return nil
 }
+
+// Maps
 
 func MapGet[T RedisKey](ctx context.Context, obj T, k string) (string, error) {
 	db, prefix := GetDb()

@@ -19,6 +19,7 @@ func AddRoutes(r *gin.RouterGroup) {
 	r.POST("/background", handlers.BackgroundHandler)
 	r.POST("/shutdown", handlers.ShutdownHandler)
 	r.POST("/line-data", handlers.LineDataHandler)
+	r.GET("/fetch-studies", handlers.FetchStudyHandler)
 	r.POST("/join-study", handlers.JoinStudyHandler)
 	r.POST("/leave-study", handlers.LeaveStudyHandler)
 	r.POST("/speech-failure/eleven", handlers.ElevenSpeechFailureHandler)

@@ -137,7 +137,7 @@ func DeleteStudy(studyId string) error {
 	return nil
 }
 
-// The ParticipantIndex of a studyId maps from UPN to StudyParticipant.
+// The ParticipantIndex of a studyId maps from (lowercase of UPN) to StudyParticipant.
 type ParticipantIndex string
 
 func (i ParticipantIndex) StoragePrefix() string {
@@ -178,7 +178,8 @@ func (s *StudyParticipant) save() error {
 		sLog().Error("serialization failure on participant", zap.String("studyId", s.StudyId), zap.Error(err))
 		return err
 	}
-	if err := platform.MapSet(sCtx(), ParticipantIndex(s.StudyId), s.Upn, string(b)); err != nil {
+	// lowercase the UPN to prevent lookup errors
+	if err := platform.MapSet(sCtx(), ParticipantIndex(s.StudyId), strings.ToLower(s.Upn), string(b)); err != nil {
 		sLog().Error("map set failure on participant save", zap.String("studyId", s.StudyId), zap.Error(err))
 	}
 	return nil
@@ -232,7 +233,8 @@ func (s *StudyParticipant) UpdateAssignment(memo string) error {
 }
 
 func GetStudyParticipant(studyId, upn string) (*StudyParticipant, error) {
-	val, err := platform.MapGet(sCtx(), ParticipantIndex(studyId), upn)
+	// lowercase the UPN to prevent lookup errors
+	val, err := platform.MapGet(sCtx(), ParticipantIndex(studyId), strings.ToLower(upn))
 	if err != nil {
 		sLog().Error("map get failure on participant lookup",
 			zap.String("studyId", studyId), zap.String("upn", upn), zap.Error(err))
@@ -263,7 +265,8 @@ func DeleteStudyParticipant(studyId, upn string) error {
 	if s.Started > 0 && s.Finished == 0 {
 		return ParticipantInUseError
 	}
-	if err = platform.MapRemove(sCtx(), ParticipantIndex(studyId), upn); err != nil {
+	// lowercase the UPN to prevent lookup errors
+	if err = platform.MapRemove(sCtx(), ParticipantIndex(studyId), strings.ToLower(upn)); err != nil {
 		sLog().Error("db failure on participant delete",
 			zap.String("studyId", studyId), zap.String("upn", upn), zap.Error(err))
 		return err

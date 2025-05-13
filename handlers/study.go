@@ -15,6 +15,22 @@ import (
 	"net/http"
 )
 
+func FetchStudyHandler(c *gin.Context) {
+	_, _, ok := ValidateRequest(c)
+	if !ok {
+		return
+	}
+	studies, err := storage.GetAllStudies()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+	}
+	results := make(map[string]string, len(studies))
+	for _, study := range studies {
+		results[study.Name] = study.Id
+	}
+	c.JSON(http.StatusOK, results)
+}
+
 func JoinStudyHandler(c *gin.Context) {
 	clientId, profileId, ok := ValidateRequest(c)
 	if !ok {

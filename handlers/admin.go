@@ -410,7 +410,7 @@ func PostParticipantsHandler(c *gin.Context) {
 		p, err = storage.CreateStudyParticipant(u.StudyId, upn)
 		if err != nil {
 			if errors.Is(err, storage.ParticipantAlreadyExistsError) {
-				msg = url.QueryEscape(fmt.Sprintf("A participant with UPN %s already exists.", p.Upn))
+				msg = url.QueryEscape(fmt.Sprintf("A participant with UPN %s already exists.", upn))
 				target := "./participants?msg=" + msg
 				c.Redirect(http.StatusSeeOther, target)
 				return

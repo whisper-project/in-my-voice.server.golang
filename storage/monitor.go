@@ -24,8 +24,31 @@ var (
 
 // EnsureMonitor makes sure that the given profile is having its ElevenLabs account
 // checked for character limits.
+//
+// Note that, if the profile has no ElevenLabs settings, this will actually remove
+// any existing monitor for that profileId.
 func EnsureMonitor(profileId, apiKey string) error {
 	if _, err := platform.GetMemberScore(sCtx(), speechMonitors, profileId); err == nil {
+		if apiKey == "" {
+			// remove this monitor
+			return RemoveMonitor(profileId)
+		}
+		// maybe update the apiKey on this monitor
+		s := &SpeechMonitor{ProfileId: profileId}
+		if err = platform.LoadObject(sCtx(), s); err != nil {
+			sLog().Info("Failed to load monitor", zap.String("profileId", profileId), zap.Error(err))
+			return err
+		}
+		if s.ApiKey != apiKey {
+			s.ApiKey = apiKey
+			if err = platform.SaveObject(sCtx(), s); err != nil {
+				sLog().Info("Failed to save monitor", zap.String("profileId", profileId), zap.Error(err))
+				return err
+			}
+		}
+		return nil
+	}
+	if apiKey == "" {
 		return nil
 	}
 	s := NewSpeechMonitor(profileId, apiKey)
