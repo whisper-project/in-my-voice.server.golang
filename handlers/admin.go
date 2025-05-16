@@ -447,25 +447,17 @@ func PostParticipantsHandler(c *gin.Context) {
 	// edits to apiKey or voiceId must be processed together
 	if apiKey != p.ApiKey || voiceId != p.VoiceId {
 		allowChanges := true
+		voiceName := ""
+		ok := false
 		if p.Started > 0 {
 			if apiKey == "" || voiceId == "" {
 				allowChanges = false
 				msg = "You can't remove ElevenLabs settings once the participant has used the app."
 				editAgain = true
-			} else if voiceName, ok, err := services.ElevenValidateVoiceId(apiKey, voiceId); !ok || err != nil {
+			} else if voiceName, ok, err = services.ElevenValidateVoiceId(apiKey, voiceId); !ok || err != nil {
 				allowChanges = false
 				msg = url.QueryEscape("The ElevenLabs API key and voice ID are invalid or incompatible.")
 				editAgain = true
-			} else {
-				// update the user to the new speech settings (which will go on the participant below)
-				settings := services.ElevenLabsGenerateSettings(apiKey, voiceId, voiceName)
-				_, err = storage.UpdateSpeechSettings(p.ProfileId, settings)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
-					return
-				}
-				_ = storage.ProfileClientSpeechDidUpdate(p.ProfileId, "none")
-				_ = storage.EnsureMonitor(p.ProfileId, apiKey)
 			}
 		}
 		// first process API Key changes
@@ -485,14 +477,30 @@ func PostParticipantsHandler(c *gin.Context) {
 		}
 		if allowChanges && voiceId != p.VoiceId {
 			if p.ApiKey == "" {
+				allowChanges = false
 				msg = url.QueryEscape("Can't set voice ID without an API key.")
 				editAgain = true
 			} else if ok, err := p.UpdateVoiceId(voiceId); err != nil {
 				c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"logout": "./logout"})
 				return
 			} else if !ok {
+				allowChanges = false
 				msg = url.QueryEscape("Invalid voice ID.")
 				editAgain = true
+			}
+		}
+		if allowChanges && p.Started > 0 {
+			// update the user to their new settings
+			didUpdate, err := storage.UpdateSpeechSettings(p.ProfileId, apiKey, voiceId, voiceName)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+				return
+			}
+			if didUpdate {
+				if err := storage.ProfileClientSpeechDidUpdate(p.ProfileId, "none"); err != nil {
+					middleware.CtxLog(c).Info("ignoring update notifications error",
+						zap.String("profileId", p.ProfileId), zap.Error(err))
+				}
 			}
 		}
 	}
@@ -830,8 +838,8 @@ func PostStudiesHandler(c *gin.Context) {
 	op := c.PostForm("op")
 	name := strings.TrimSpace(c.PostForm("name"))
 	email := strings.TrimSpace(c.PostForm("email"))
-	if name == "" {
-		msg := url.QueryEscape("You must provide a study name.")
+	if len(name) < 5 {
+		msg := url.QueryEscape("Study names must have at least five characters.")
 		target := fmt.Sprintf("./studies?msg=%s", msg)
 		c.Redirect(http.StatusSeeOther, target)
 		return

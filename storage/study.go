@@ -11,14 +11,15 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/whisper-project/in-my-voice.server.golang/platform"
-	"github.com/whisper-project/in-my-voice.server.golang/services"
-	"go.uber.org/zap"
 	"hash/fnv"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/whisper-project/in-my-voice.server.golang/platform"
+	"github.com/whisper-project/in-my-voice.server.golang/services"
+	"go.uber.org/zap"
 )
 
 // A Study is the locus of data collection and participant management
@@ -333,15 +334,14 @@ func GetProfileStudyMembership(profileId string) (studyId string, upn string, er
 	return
 }
 
-func EnrollStudyParticipant(profileId, studyId, upn string) (settings, apiKey string, err error) {
+func EnrollStudyParticipant(profileId, studyId, upn string) (*StudyParticipant, error) {
 	var p *StudyParticipant
-	p, err = GetStudyParticipant(studyId, upn)
+	p, err := GetStudyParticipant(studyId, upn)
 	if err != nil {
-		return
+		return nil, err
 	}
 	if p == nil {
-		err = ParticipantNotAvailableError
-		return
+		return nil, ParticipantNotAvailableError
 	}
 	if p.Assigned == 0 {
 		sLog().Info("auto-assigning participant",
@@ -356,21 +356,18 @@ func EnrollStudyParticipant(profileId, studyId, upn string) (settings, apiKey st
 		// participant is re-enrolling
 		p.Finished = 0
 	} else {
-		err = ParticipantNotAvailableError
-		return
+		return nil, ParticipantNotAvailableError
 	}
 	if err = p.save(); err != nil {
-		return
+		return nil, err
 	}
 	if err = platform.MapSet(sCtx(), profileParticipantMap, profileId, studyId+"+"+upn); err != nil {
 		sLog().Error("map set failure on participant assignment",
 			zap.String("profileId", profileId), zap.String("studyId", studyId), zap.String("upn", upn),
 			zap.Error(err))
-		return
+		return nil, err
 	}
-	apiKey = p.ApiKey
-	settings = services.ElevenLabsGenerateSettings(apiKey, p.VoiceId, p.VoiceName)
-	return
+	return p, nil
 }
 
 func UnenrollStudyParticipant(profileId string, studyId, upn string) error {

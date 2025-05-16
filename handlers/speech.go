@@ -51,8 +51,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read the request body"})
 		return
 	}
-	settings := string(body)
-	apiKey, voiceId, voiceName, ok := services.ElevenParseSettings(settings)
+	apiKey, voiceId, voiceName, ok := services.ElevenParseSettings(string(body))
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid settings"})
 		return
@@ -63,10 +62,10 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 			return
 		}
-		defer func() {
-			_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
-			_ = storage.RemoveMonitor(profileId)
-		}()
+		if err := storage.ProfileClientSpeechDidUpdate(profileId, clientId); err != nil {
+			middleware.CtxLog(c).Info("ignoring update notifications error",
+				zap.String("profileId", profileId), zap.Error(err))
+		}
 		c.Header("X-Speech-Settings-Update", "true")
 		c.Status(http.StatusNoContent)
 		return
@@ -109,22 +108,21 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		middleware.CtxLog(c).Info("the uploaded voice name does not match voice ID, fixing it",
 			zap.String("actual name", voiceId), zap.String("uploaded name", voiceName),
 		)
-		settings = services.ElevenLabsGenerateSettings(apiKey, voiceId, name)
 	}
 	// validation complete: update the voice settings
-	changed, err := storage.UpdateSpeechSettings(profileId, settings)
+	changed, err := storage.UpdateSpeechSettings(profileId, apiKey, voiceId, name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
 	if changed {
+		if err := storage.ProfileClientSpeechDidUpdate(profileId, clientId); err != nil {
+			middleware.CtxLog(c).Info("ignoring update notifications error",
+				zap.String("profileId", profileId), zap.Error(err))
+		}
 		c.Header("X-Speech-Settings-Update", "true")
-		defer func() {
-			_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
-			_ = storage.EnsureMonitor(profileId, apiKey)
-		}()
 	}
-	middleware.CtxLog(c).Info("speech settings updated",
+	middleware.CtxLog(c).Info("speech settings validated",
 		zap.String("clientId", clientId), zap.String("profileId", profileId))
 	c.Status(http.StatusNoContent)
 }
@@ -167,4 +165,41 @@ func ElevenSpeechFailureHandler(c *gin.Context) {
 		zap.Any("response", body["response"]))
 	c.Status(http.StatusNoContent)
 	return
+}
+
+func ParticipantElevenSpeechSettingsHandler(c *gin.Context) {
+	_, profileId, ok := ValidateRequest(c)
+	if !ok {
+		return
+	}
+	studyId, upn, err := storage.GetProfileStudyMembership(profileId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+		return
+	}
+	if studyId == "" || upn == "" {
+		// not in a study, so no settings
+		c.Status(http.StatusNoContent)
+		return
+	}
+	p, err := storage.GetStudyParticipant(studyId, upn)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+		return
+	}
+	if p == nil {
+		// shouldn't happen
+		middleware.CtxLog(c).Info("participant data not found",
+			zap.String("profileId", profileId), zap.String("studyId", studyId), zap.String("upn", upn))
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database inconsistency"})
+		return
+	}
+	if p.ApiKey == "" {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	middleware.CtxLog(c).Info("retrieved participant speech settings", zap.String("profileId", profileId),
+		zap.String("studyId", studyId), zap.String("upn", upn))
+	settings := services.ElevenLabsGenerateSettings(p.ApiKey, p.VoiceId, p.VoiceName)
+	c.JSON(http.StatusOK, settings)
 }

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
+	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"go.uber.org/zap"
 )
 
@@ -65,12 +66,13 @@ func GetSpeechSettings(profileId string) (*SpeechSettings, error) {
 	return s, nil
 }
 
-func UpdateSpeechSettings(profileId, settings string) (bool, error) {
+func UpdateSpeechSettings(profileId, apiKey, voiceId, voiceName string) (bool, error) {
+	settings := services.ElevenLabsGenerateSettings(apiKey, voiceId, voiceName)
 	n := NewSpeechSettings(profileId, settings)
 	o := &SpeechSettings{ProfileId: profileId}
 	if err := platform.LoadObject(sCtx(), o); err != nil {
 		if !errors.Is(err, platform.NotFoundError) {
-			sLog().Error("db failure on settings update",
+			sLog().Error("db failure on speech settings update",
 				zap.String("profileId", profileId), zap.Error(err))
 			return false, err
 		}
@@ -83,6 +85,10 @@ func UpdateSpeechSettings(profileId, settings string) (bool, error) {
 			zap.String("profileId", profileId), zap.Error(err))
 		return false, err
 	}
+	if err := EnsureMonitor(profileId, apiKey); err != nil {
+		sLog().Info("ignoring monitor update failure",
+			zap.String("profileId", profileId), zap.Error(err))
+	}
 	return true, nil
 }
 
@@ -92,6 +98,10 @@ func DeleteSpeechSettings(profileId string) error {
 		sLog().Error("delete failure on settings delete",
 			zap.String("profileId", profileId), zap.Error(err))
 		return err
+	}
+	if err := RemoveMonitor(profileId); err != nil {
+		sLog().Info("ignoring monitor removal error",
+			zap.String("profileId", profileId), zap.Error(err))
 	}
 	return nil
 }

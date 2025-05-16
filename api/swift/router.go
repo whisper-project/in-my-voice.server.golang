@@ -25,6 +25,7 @@ func AddRoutes(r *gin.RouterGroup) {
 	r.POST("/speech-failure/eleven", handlers.ElevenSpeechFailureHandler)
 	r.GET("/speech-settings/eleven", handlers.ElevenSpeechSettingsGetHandler)
 	r.POST("/speech-settings/eleven", handlers.ElevenSpeechSettingsPostHandler)
+	r.GET("/participant-settings/eleven", handlers.ParticipantElevenSpeechSettingsHandler)
 	r.GET("/favorites", handlers.FavoritesGetHandler)
 	r.PUT("/favorites", handlers.FavoritesPutHandler)
 }

@@ -10,10 +10,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"time"
+
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"go.uber.org/zap"
-	"time"
 )
 
 var (
@@ -113,8 +114,8 @@ type SpeechMonitor struct {
 	ApiKey     string
 	UsedChars  int64
 	LimitChars int64
-	NextCheck  int64
-	NextRenew  int64
+	NextCheck  int64 // epoch seconds
+	NextRenew  int64 // epoch seconds
 }
 
 func (s *SpeechMonitor) StoragePrefix() string {
@@ -143,7 +144,7 @@ func NewSpeechMonitor(profileId, apiKey string) *SpeechMonitor {
 }
 
 func (s *SpeechMonitor) Update(ctx context.Context) error {
-	var lastPct int64
+	var lastPct int64 = 100
 	if s.LimitChars > 0 {
 		lastPct = s.UsedChars * 100 / s.LimitChars
 	}
@@ -157,8 +158,12 @@ func (s *SpeechMonitor) Update(ctx context.Context) error {
 	s.UsedChars = info.CharacterCount
 	s.LimitChars = info.CharacterLimit
 	s.NextRenew = info.NextCharacterCountResetUnix
-	curPct := s.UsedChars * 100 / s.LimitChars
-	rateDelay := min(((s.LimitChars-s.UsedChars)*24*3600)/maxCharsPerDay, maxRateDelay)
+	var curPct int64 = 100
+	if s.LimitChars > 0 {
+		curPct = s.UsedChars * 100 / s.LimitChars
+	}
+	rateDelay := ((s.LimitChars - s.UsedChars) * 24 * 3600) / maxCharsPerDay
+	rateDelay = min(rateDelay, maxRateDelay)
 	s.NextCheck = min(time.Now().Unix()+rateDelay, s.NextRenew)
 	switch {
 	case lastRenew < s.NextRenew && lastPct >= 99:
@@ -176,6 +181,10 @@ func (s *SpeechMonitor) Update(ctx context.Context) error {
 	case curPct >= 90:
 		// user is approaching their cutoff, check every hour
 		s.NextRenew = time.Now().Unix() + 3500
+	}
+	if err = platform.SaveObject(ctx, s); err != nil {
+		sLog().Error("save of updated monitor failed", zap.Any("monitor", s), zap.Error(err))
+		return err
 	}
 	sLog().Info("Completed monitor update",
 		zap.String("profileId", s.ProfileId), zap.Int64("pctUsed", curPct),

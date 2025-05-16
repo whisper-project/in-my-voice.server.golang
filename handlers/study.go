@@ -8,11 +8,12 @@ package handlers
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 func FetchStudyHandler(c *gin.Context) {
@@ -48,7 +49,7 @@ func JoinStudyHandler(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "study ID already assigned"})
 	}
 	var body map[string]any
-	if err := c.ShouldBind(&body); err != nil {
+	if err = c.ShouldBind(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid request body"})
 		return
 	}
@@ -58,32 +59,46 @@ func JoinStudyHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid request body"})
 		return
 	}
-	settings, apiKey, err := storage.EnrollStudyParticipant(profileId, studyId, upn)
+	study, err := storage.GetStudy(studyId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+		return
+	}
+	if study == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "study ID invalid or not available"})
+		return
+	}
+	p, err := storage.EnrollStudyParticipant(profileId, studyId, upn)
 	if errors.Is(err, storage.ParticipantNotAvailableError) {
-		middleware.CtxLog(c).Info("study ID invalid or not available",
+		middleware.CtxLog(c).Info("UPN invalid or not available",
 			zap.String("clientId", clientId), zap.String("profileId", profileId),
 			zap.String("studyId", studyId))
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "study ID invalid or not available"})
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "UPN invalid or not available"})
 		return
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
-	// user is now in the study, save their settings and tell them
-	_, err = storage.UpdateSpeechSettings(profileId, settings)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+	// user is now in the study
+	middleware.CtxLog(c).Info("user assigned to study",
+		zap.String("clientId", clientId), zap.String("profileId", profileId),
+		zap.String("studyId", studyId), zap.String("upn", upn))
+	c.Header("X-Study-Membership-Update", study.Name)
+	// if there are speech settings in the participant, apply them to the profile
+	if p != nil && p.ApiKey != "" {
+		updatedUser, err := storage.UpdateSpeechSettings(profileId, p.ApiKey, p.VoiceId, p.VoiceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+			return
+		}
+		if updatedUser {
+			// ignore update errors
+			_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
+			c.Header("X-Speech-Settings-Update", "true")
+		}
+		c.JSON(http.StatusOK, gin.H{"elevenSettings": "updated"})
 		return
 	}
-	defer func() {
-		_ = storage.ProfileClientSpeechDidUpdate(profileId, clientId)
-		_ = storage.EnsureMonitor(profileId, apiKey)
-	}()
-	middleware.CtxLog(c).Info("study ID assigned",
-		zap.String("clientId", clientId), zap.String("profileId", profileId),
-		zap.String("studyId", studyId))
-	c.Header("X-Study-Membership-Update", "true")
-	c.Header("X-Speech-Settings-Update", "true")
 	c.Status(http.StatusNoContent)
 }
 
@@ -109,7 +124,7 @@ func LeaveStudyHandler(c *gin.Context) {
 	// user is now out of the study, but they retain their speech settings
 	middleware.CtxLog(c).Info("study ID unassigned",
 		zap.String("clientId", clientId), zap.String("profileId", profileId), zap.String("studyId", upn))
-	c.Header("X-Study-Membership-Update", "false")
+	c.Header("X-Study-Membership-Update", "none")
 	c.Status(http.StatusNoContent)
 }
 

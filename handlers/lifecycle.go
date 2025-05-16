@@ -7,14 +7,12 @@
 package handlers
 
 import (
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
-	"net/http"
-	"strconv"
-
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"net/http"
 )
 
 func AnomalyHandler(c *gin.Context) {
@@ -36,13 +34,24 @@ func LaunchHandler(c *gin.Context) {
 	}
 	storage.ObserveClientLaunch(clientType, clientId, profileId)
 	// make sure the client knows whether they're enrolled in the study
-	// and whether they should be collecting stats for non-study members
-	studyId, isEnrolled, err := storage.GetProfileStudyMembership(profileId)
+	studyId, _, err := storage.GetProfileStudyMembership(profileId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
-	c.Header("X-Study-Membership-Update", strconv.FormatBool(studyId != "" && isEnrolled != ""))
+	studyName := "none"
+	if studyId != "" {
+		study, err := storage.GetStudy(studyId)
+		if err != nil || study == nil {
+			if study == nil {
+				middleware.CtxLog(c).Warn("enrolled study has gone missing", zap.String("studyId", studyId))
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+			return
+		}
+		studyName = study.Name
+	}
+	c.Header("X-Study-Membership-Update", studyName)
 	// make sure any other update annotation has been removed,
 	// because clients update everything at launch
 	c.Header("X-Speech-Settings-Update", "")
