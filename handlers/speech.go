@@ -8,13 +8,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
 )
 
 func ElevenSpeechSettingsGetHandler(c *gin.Context) {
@@ -172,6 +173,7 @@ func ParticipantElevenSpeechSettingsHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
+	update := c.Query("update")
 	studyId, upn, err := storage.GetProfileStudyMembership(profileId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
@@ -195,11 +197,29 @@ func ParticipantElevenSpeechSettingsHandler(c *gin.Context) {
 		return
 	}
 	if p.ApiKey == "" {
+		// the user is a participant, but they don't have speech settings
 		c.Status(http.StatusNoContent)
 		return
 	}
-	middleware.CtxLog(c).Info("retrieved participant speech settings", zap.String("profileId", profileId),
-		zap.String("studyId", studyId), zap.String("upn", upn))
 	settings := services.ElevenLabsGenerateSettings(p.ApiKey, p.VoiceId, p.VoiceName)
-	c.JSON(http.StatusOK, settings)
+	// now get the current profile speech settings and compare them
+	profileSettings, err := storage.GetSpeechSettings(profileId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+		return
+	}
+	if profileSettings != nil && profileSettings.Settings == settings {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	// the participant settings and the user settings are different
+	if update == "true" {
+		// replace the user settings with the participant settings
+		if _, err := storage.UpdateSpeechSettings(profileId, p.ApiKey, p.VoiceId, p.VoiceName); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+			return
+		}
+		c.Header("X-Speech-Settings-Update", "true")
+	}
+	c.JSON(http.StatusOK, gin.H{"update": update})
 }
