@@ -186,6 +186,10 @@ func (s *SpeechMonitor) Update(ctx context.Context) error {
 		sLog().Error("save of updated monitor failed", zap.Any("monitor", s), zap.Error(err))
 		return err
 	}
+	if err = platform.AddScoredMember(sCtx(), speechMonitors, float64(s.NextRenew), s.ProfileId); err != nil {
+		sLog().Error("add scored member failed",
+			zap.String("profileId", s.ProfileId), zap.Error(err))
+	}
 	sLog().Info("Completed monitor update",
 		zap.String("profileId", s.ProfileId), zap.Int64("pctUsed", curPct),
 		zap.Int64("usedChars", s.UsedChars), zap.Int64("limitChars", s.LimitChars),
