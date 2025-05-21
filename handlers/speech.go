@@ -169,7 +169,7 @@ func ElevenSpeechFailureHandler(c *gin.Context) {
 }
 
 func ParticipantElevenSpeechSettingsHandler(c *gin.Context) {
-	_, profileId, ok := ValidateRequest(c)
+	clientId, profileId, ok := ValidateRequest(c)
 	if !ok {
 		return
 	}
@@ -218,6 +218,10 @@ func ParticipantElevenSpeechSettingsHandler(c *gin.Context) {
 		if _, err := storage.UpdateSpeechSettings(profileId, p.ApiKey, p.VoiceId, p.VoiceName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 			return
+		}
+		if err := storage.ProfileClientSpeechDidUpdate(p.ProfileId, clientId); err != nil {
+			middleware.CtxLog(c).Info("ignoring update notifications error",
+				zap.String("profileId", p.ProfileId), zap.Error(err))
 		}
 		c.Header("X-Speech-Settings-Update", "true")
 	}
