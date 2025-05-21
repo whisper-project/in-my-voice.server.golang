@@ -9,12 +9,6 @@ package handlers
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/whisper-project/in-my-voice.server.golang/middleware"
-	"github.com/whisper-project/in-my-voice.server.golang/services"
-	"github.com/whisper-project/in-my-voice.server.golang/storage"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,6 +16,13 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/whisper-project/in-my-voice.server.golang/middleware"
+	"github.com/whisper-project/in-my-voice.server.golang/services"
+	"github.com/whisper-project/in-my-voice.server.golang/storage"
+	"go.uber.org/zap"
 )
 
 var emailPattern = regexp.MustCompile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
@@ -607,6 +608,13 @@ func PostReportsHandler(c *gin.Context) {
 		return
 	}
 	op := c.PostForm("op")
+	name := strings.TrimSpace(c.PostForm("name"))
+	if name == "" {
+		// shouldn't happen
+		message := url.QueryEscape("The report name must not be empty.")
+		c.Redirect(http.StatusSeeOther, "./reports?msg="+message)
+		return
+	}
 	// create the report object
 	var r *storage.StudyReport
 	if op == storage.ReportTypeLines {
@@ -621,9 +629,9 @@ func PostReportsHandler(c *gin.Context) {
 			return
 		}
 		upns := c.PostFormArray("upns")
-		r = storage.NewStudyReport(study.Id, study.Name, storage.ReportTypeLines, start, end, upns)
+		r = storage.NewStudyReport(study.Id, name, storage.ReportTypeLines, start, end, upns)
 	} else if op == storage.ReportTypePhrases {
-		r = storage.NewStudyReport(study.Id, study.Name, storage.ReportTypePhrases, 0, 0, nil)
+		r = storage.NewStudyReport(study.Id, name, storage.ReportTypePhrases, 0, 0, nil)
 	} else {
 		// shouldn't happen
 		c.HTML(http.StatusInternalServerError, "admin/error.tmpl.html", gin.H{"logout": "./logout"})

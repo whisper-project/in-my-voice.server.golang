@@ -10,16 +10,17 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/tealeg/xlsx/v3"
-	"github.com/whisper-project/in-my-voice.server.golang/platform"
-	"go.uber.org/zap"
 	"io"
 	"os"
 	"path"
 	"regexp"
 	"slices"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/tealeg/xlsx/v3"
+	"github.com/whisper-project/in-my-voice.server.golang/platform"
+	"go.uber.org/zap"
 )
 
 type ReportType = string
@@ -97,7 +98,9 @@ func (s *StudyReport) Generate() error {
 			zap.Any("report", s), zap.Error(err))
 	}
 	defer f.Close()
-	if err = platform.S3PutEncryptedBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId, f); err != nil {
+	cfg := platform.GetConfig()
+	folder := cfg.AwsReportFolder + "/" + cfg.Name
+	if err = platform.S3PutEncryptedBlob(sCtx(), folder, s.ReportId, f); err != nil {
 		sLog().Error("failed to store the generated report",
 			zap.Any("report", s), zap.Error(err))
 		return err
@@ -105,7 +108,7 @@ func (s *StudyReport) Generate() error {
 	s.Stored = true
 	if err = s.save(); err != nil {
 		_ = os.Remove(localPath)
-		_ = platform.S3DeleteBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId)
+		_ = platform.S3DeleteBlob(sCtx(), folder, s.ReportId)
 		return err
 	}
 	return nil
@@ -122,7 +125,9 @@ func (s *StudyReport) Retrieve() (io.ReadCloser, error) {
 			zap.Any("report", s), zap.Error(err))
 		return nil, err
 	}
-	if err = platform.S3GetEncryptedBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId, f); err != nil {
+	cfg := platform.GetConfig()
+	folder := cfg.AwsReportFolder + "/" + cfg.Name
+	if err = platform.S3GetEncryptedBlob(sCtx(), folder, s.ReportId, f); err != nil {
 		f.Close()
 		_ = os.Remove(localPath)
 		sLog().Error("failed to retrieve the report from S3",
@@ -148,7 +153,9 @@ func (s *StudyReport) Delete() error {
 		}
 	}
 	if s.Stored {
-		if err := platform.S3DeleteBlob(sCtx(), platform.GetConfig().AwsReportFolder, s.ReportId); err != nil {
+		cfg := platform.GetConfig()
+		folder := cfg.AwsReportFolder + "/" + cfg.Name
+		if err := platform.S3DeleteBlob(sCtx(), folder, s.ReportId); err != nil {
 			sLog().Error("failed to delete the report from S3",
 				zap.Any("report", s), zap.Error(err))
 		}

@@ -498,7 +498,7 @@ func FetchAllTypedLineStats(studyId string, start int64, end int64, upns []strin
 			}
 		}
 	} else {
-		upns, err := platform.FetchRange(sCtx(), ParticipantIndex(studyId), 0, -1)
+		upns, err := platform.MapGetKeys(sCtx(), ParticipantIndex(studyId))
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch study members: %w", err)
 		}
@@ -540,7 +540,7 @@ func (s *PhraseStat) FromRedis(b []byte) error {
 type PhraseStatsIndex string
 
 func (i PhraseStatsIndex) StoragePrefix() string {
-	return "study-members:"
+	return "phrase-stats:"
 }
 func (i PhraseStatsIndex) StorageId() string {
 	return string(i)
