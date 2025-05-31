@@ -42,7 +42,6 @@ var serveCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(serveCmd)
 	serveCmd.Args = cobra.NoArgs
-	serveCmd.Flags().StringP("env", "e", "development", "The environment to run in")
 	serveCmd.Flags().StringP("address", "a", "127.0.0.1", "The IP address to listen on")
 	serveCmd.Flags().StringP("port", "p", "8080", "The port to listen on")
 }

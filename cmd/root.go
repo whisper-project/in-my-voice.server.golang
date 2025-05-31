@@ -17,7 +17,7 @@ var rootCmd = &cobra.Command{
 	Use:   "in-my-voice.server.golang",
 	Short: "The server side of the In My Voice app.",
 	Long: `In My Voice is a text-to-speech iOS/macOS app for use with cloned voices.
-This is the server side of that app. Invoke it with an appropriate subcomand.`,
+This is the server side of that app. Invoke it with an appropriate subcommand.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -30,4 +30,5 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringP("env", "e", "development", "The environment to run in.")
 }

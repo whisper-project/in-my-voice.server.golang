@@ -8,34 +8,37 @@ package cmd
 
 import (
 	"context"
-	"github.com/whisper-project/in-my-voice.server.golang/platform"
-	"github.com/whisper-project/in-my-voice.server.golang/storage"
 	"log"
 	"slices"
+
+	"github.com/whisper-project/in-my-voice.server.golang/platform"
+	"github.com/whisper-project/in-my-voice.server.golang/storage"
 
 	"github.com/spf13/cobra"
 )
 
-// cleanCmd represents the clean command
-var cleanCmd = &cobra.Command{
+// dbCleanCmd represents the clean command
+var dbCleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Clean up the database",
-	Long: `Track down and remove unused database entries and stored objects.
-Can also be used, with flags, to remove objects of various types.`,
+	Long:  `Track down and remove unused database entries and stored objects.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		log.SetFlags(0)
 		env, _ := cmd.Flags().GetString("env")
 		if err := platform.PushConfig(env); err != nil {
 			log.Fatalf("Can't load environment %q: %v", env, err)
 		}
+		log.Println("Cleaning orphan reports...")
 		cleanOrphanReports()
+		log.Println("Cleaning empty speech settings...")
+		cleanEmptySpeechSettings()
+		log.Println("Done.")
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(cleanCmd)
-	cleanCmd.Args = cobra.NoArgs
-	cleanCmd.Flags().StringP("env", "e", "development", "environment to clean")
+	dbCmd.AddCommand(dbCleanCmd)
+	dbCleanCmd.Args = cobra.NoArgs
 }
 
 func cleanOrphanReports() {
@@ -55,7 +58,9 @@ func cleanOrphanReports() {
 		allReportIds = append(allReportIds, rIds...)
 	}
 	// next get all the saved report blob ids
-	allBlobIds, err := platform.S3ListBlobs(ctx, platform.GetConfig().AwsReportFolder)
+	cfg := platform.GetConfig()
+	folder := cfg.AwsReportFolder + "/" + cfg.Name
+	allBlobIds, err := platform.S3ListBlobs(ctx, folder)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,5 +94,20 @@ func cleanOrphanReports() {
 				log.Fatal(err)
 			}
 		}
+	}
+}
+
+func cleanEmptySpeechSettings() {
+	ctx := context.Background()
+	s := new(storage.SpeechSettings)
+	mapper := func() error {
+		if s.ProfileId == "" || s.VoiceId == "" || s.VoiceName == "" {
+			log.Printf("Deleting empty speech settings for profile %s", s.ProfileId)
+			return platform.DeleteStorage(ctx, s)
+		}
+		return nil
+	}
+	if err := platform.MapObjects(ctx, mapper, s); err != nil {
+		log.Fatal(err)
 	}
 }

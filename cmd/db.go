@@ -12,11 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var studyCmd = &cobra.Command{
-	Use:   "study",
-	Short: "Manage study policy and reports.",
-	Long: `Determine the policies covering data collection
-and get reports on data collected.`,
+// dbCmd represents the db command
+var dbCmd = &cobra.Command{
+	Use:   "db",
+	Short: "Database utilities",
+	Long: `This is the parent command for managing the database.
+It must be invoked with a subcommand.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		log.SetFlags(0)
 		log.Fatal("You must specify a subcommand.")
@@ -24,5 +25,5 @@ and get reports on data collected.`,
 }
 
 func init() {
-	rootCmd.AddCommand(studyCmd)
+	rootCmd.AddCommand(dbCmd)
 }
