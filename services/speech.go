@@ -33,7 +33,8 @@ func ElevenParseSettings(settings string) (apiKey, voiceId, voiceName, modelId s
 	}
 	model, k := s["modelId"].(string)
 	if !k {
-		return
+		// older clients don't have a model parameter
+		model = ""
 	}
 	return key, voice, name, model, true
 }
