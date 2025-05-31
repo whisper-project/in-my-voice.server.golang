@@ -82,7 +82,7 @@ func UnmarshalStoredObjects[T any](template T, ms []json.RawMessage) ([]any, err
 // start of the data and transform to UTF8 accordingly.
 // If there is no BOM, it will read the data without any transformation.
 //
-// This code taken from [this StackOverflow answer](https://stackoverflow.com/a/76023436/558006).
+// This code is taken from [this StackOverflow answer](https://stackoverflow.com/a/76023436/558006).
 func BOMAwareCSVReader(reader io.Reader) *csv.Reader {
 	transformer := unicode.BOMOverride(encoding.Nop.NewDecoder())
 	return csv.NewReader(transform.NewReader(reader, transformer))

@@ -23,14 +23,17 @@ import (
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
 )
 
-// Startup takes a configured router and runs a server instance with it as handler.
+// Startup takes a configured router and runs a server instance with it as a handler.
 // The instance is configured so that it can be exited cleanly.
 //
-// This code based on [this example](https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-with-context/server.go)
+// This code is based on [this example](https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/notify-with-context/admins.go)
 func Startup(router *gin.Engine, hostPort string) {
 	// Create context that listens for the interrupt signal from the OS.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Start the speech monitors
+	stopMonitors := startMonitors()
 
 	// Run the server in a goroutine so that this instance survives it
 	running := true
@@ -43,35 +46,34 @@ func Startup(router *gin.Engine, hostPort string) {
 		running = false
 	}()
 
-	// Listen for the interrupt signal, and restore default behavior
+	// Listen for the interrupt signal and restore default behavior
 	<-ctx.Done()
 	stop()
 	sLog().Info("interrupt received")
 
 	// Shutdown the http server instance cleanly.
-	// If the server is still running, we give it until we have Shutdown,
-	// at which point we force quit it.
-	ctx, cancel := context.WithCancel(sCtx())
+	// If the server is still running, we give it 15 seconds to stop cleanly.
+	ctx, cancel := context.WithTimeout(sCtx(), 15*time.Second)
 	storage.ServerContext = ctx
 	defer cancel()
 	if running {
 		go func() {
 			if err := srv.Shutdown(ctx); err != nil {
-				sLog().Error("http server terminated with error", zap.Error(err))
+				sLog().Error("http server terminated with an error", zap.Error(err))
+				return
 			}
 			sLog().Info("http server gracefully stopped")
 		}()
 	}
-	Shutdown()
-	cancel()
-	sLog().Info("server instance shutdown complete")
-}
 
-// Shutdown cleanly terminates this server instance.
-func Shutdown() {
-	sLog().Info("background routines being stopped")
-	time.Sleep(1 * time.Second)
-	sLog().Info("background routines all stopped")
+	// Stop the monitors and then exit
+	sLog().Info("Stopping monitors...")
+	if stopMonitors() != nil {
+		sLog().Info("Monitors failed to stop cleanly")
+	} else {
+		sLog().Info("Monitors stopped cleanly")
+	}
+	sLog().Info("server instance shutdown complete")
 }
 
 func CreateEngine() (*gin.Engine, error) {

@@ -43,7 +43,7 @@ func TestCreateCoreEngineErrorReporting(t *testing.T) {
 	r.GET("/ping", func(c *gin.Context) {
 		CtxLogS(c).Errorw("test error 1", "url", c.Request.URL.String())
 		CtxLogS(c).Errorw("test error 2", "url", c.Request.URL.String())
-		c.JSON(400, gin.H{"status": "error", "error": "test error"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "test error"})
 	})
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)

@@ -7,7 +7,9 @@
 package storage
 
 import (
+	"bytes"
 	"crypto/md5"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
@@ -15,47 +17,30 @@ import (
 )
 
 type FavoritesSettings struct {
-	ProfileId string `redis:"profileId"`
-	Settings  string `redis:"settings"`
-	ETag      string `redis:"eTag"`
+	ProfileId string
+	Settings  string
+	ETag      string
 }
 
 func (f *FavoritesSettings) StoragePrefix() string {
 	return "favorites-settings:"
 }
-
 func (f *FavoritesSettings) StorageId() string {
 	if f == nil {
 		return ""
 	}
 	return f.ProfileId
 }
-
-func (f *FavoritesSettings) SetStorageId(id string) error {
-	if f == nil {
-		return fmt.Errorf("can't set id of nil %T", f)
+func (f *FavoritesSettings) ToRedis() ([]byte, error) {
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(f); err != nil {
+		return nil, err
 	}
-	f.ProfileId = id
-	return nil
+	return b.Bytes(), nil
 }
-
-func (f *FavoritesSettings) Copy() platform.StructPointer {
-	if f == nil {
-		return nil
-	}
-	n := new(FavoritesSettings)
-	*n = *f
-	return n
-}
-
-func (f *FavoritesSettings) Downgrade(a any) (platform.StructPointer, error) {
-	if o, ok := a.(FavoritesSettings); ok {
-		return &o, nil
-	}
-	if o, ok := a.(*FavoritesSettings); ok {
-		return o, nil
-	}
-	return nil, fmt.Errorf("not a %T: %#v", f, a)
+func (f *FavoritesSettings) FromRedis(b []byte) error {
+	*f = FavoritesSettings{} // dump old data
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(f)
 }
 
 func NewFavoritesSettings(profileId, settings string) *FavoritesSettings {
@@ -69,11 +54,11 @@ func NewFavoritesSettings(profileId, settings string) *FavoritesSettings {
 
 func GetFavoritesSettings(profileId string) (*FavoritesSettings, error) {
 	f := &FavoritesSettings{ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), f); err != nil {
-		if errors.Is(err, platform.StructPointerNotFoundError) {
+	if err := platform.LoadObject(sCtx(), f); err != nil {
+		if errors.Is(err, platform.NotFoundError) {
 			return nil, nil
 		}
-		sLog().Error("load fields failure on settings fetch",
+		sLog().Error("db failure on settings fetch",
 			zap.String("profileId", profileId), zap.Error(err))
 		return nil, err
 	}
@@ -83,9 +68,9 @@ func GetFavoritesSettings(profileId string) (*FavoritesSettings, error) {
 func UpdateFavoritesSettings(profileId, settings string) (bool, error) {
 	n := NewFavoritesSettings(profileId, settings)
 	o := &FavoritesSettings{ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), o); err != nil {
-		if !errors.Is(err, platform.StructPointerNotFoundError) {
-			sLog().Error("load fields failure on settings update",
+	if err := platform.LoadObject(sCtx(), o); err != nil {
+		if !errors.Is(err, platform.NotFoundError) {
+			sLog().Error("db failure on settings update",
 				zap.String("profileId", profileId), zap.Error(err))
 			return false, err
 		}
@@ -93,8 +78,8 @@ func UpdateFavoritesSettings(profileId, settings string) (bool, error) {
 	if o.ETag == n.ETag {
 		return false, nil
 	}
-	if err := platform.SaveFields(sCtx(), n); err != nil {
-		sLog().Error("save fields failure on settings update",
+	if err := platform.SaveObject(sCtx(), n); err != nil {
+		sLog().Error("db failure on settings update",
 			zap.String("profileId", profileId), zap.Error(err))
 		return false, err
 	}

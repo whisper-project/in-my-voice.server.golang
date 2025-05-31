@@ -7,10 +7,9 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
-	"fmt"
-	"github.com/google/uuid"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -20,59 +19,34 @@ import (
 
 // LifecycleData tracks the life cycle of a profile/client pair
 type LifecycleData struct {
-	ClientType   string `redis:"clientType"`
-	ClientId     string `redis:"clientId"`
-	ProfileId    string `redis:"profileId"`
-	LaunchCount  int64  `redis:"launchCount"`
-	LastLaunch   int64  `redis:"lastLaunch"`
-	LastActive   int64  `redis:"lastActive"`
-	LastShutdown int64  `redis:"lastShutdown"`
+	ClientType   string
+	ClientId     string
+	ProfileId    string
+	LaunchCount  int64
+	LastLaunch   int64
+	LastActive   int64
+	LastShutdown int64
 }
 
 func (l *LifecycleData) StoragePrefix() string {
 	return "launch-data:"
 }
-
 func (l *LifecycleData) StorageId() string {
 	if l == nil {
 		return ""
 	}
 	return l.ClientId + "|" + l.ProfileId
 }
-
-func (l *LifecycleData) SetStorageId(id string) error {
-	if l == nil {
-		return fmt.Errorf("can't set id of nil %T", l)
+func (l *LifecycleData) ToRedis() ([]byte, error) {
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(l); err != nil {
+		return nil, err
 	}
-	clientId, profileId, ok := strings.Cut(id, "|")
-	if !ok {
-		return fmt.Errorf("invalid id %q", id)
-	}
-	if uuid.Validate(clientId) == nil || uuid.Validate(profileId) == nil {
-		return fmt.Errorf("invalid id %q", id)
-	}
-	l.ClientId = clientId
-	l.ProfileId = profileId
-	return nil
+	return b.Bytes(), nil
 }
-
-func (l *LifecycleData) Copy() platform.StructPointer {
-	if l == nil {
-		return nil
-	}
-	n := new(LifecycleData)
-	*n = *l
-	return n
-}
-
-func (l *LifecycleData) Downgrade(a any) (platform.StructPointer, error) {
-	if o, ok := a.(LifecycleData); ok {
-		return &o, nil
-	}
-	if o, ok := a.(*LifecycleData); ok {
-		return o, nil
-	}
-	return nil, fmt.Errorf("not a %T: %#v", l, a)
+func (l *LifecycleData) FromRedis(b []byte) error {
+	*l = LifecycleData{} // dump old data
+	return gob.NewDecoder(bytes.NewReader(b)).Decode(l)
 }
 
 func NewLifecycleData(clientId, profileId string) *LifecycleData {
@@ -84,11 +58,11 @@ func NewLifecycleData(clientId, profileId string) *LifecycleData {
 
 func ObserveClientLaunch(clientType, clientId, profileId string) {
 	l := &LifecycleData{ClientId: clientId, ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), l); err != nil {
-		if errors.Is(err, platform.StructPointerNotFoundError) {
+	if err := platform.LoadObject(sCtx(), l); err != nil {
+		if errors.Is(err, platform.NotFoundError) {
 			l = NewLifecycleData(clientId, profileId)
 		} else {
-			sLog().Error("load fields failure on client launch",
+			sLog().Error("db failure on client launch",
 				zap.String("clientType", clientType), zap.String("clientId", clientId),
 				zap.String("profileId", profileId), zap.Error(err))
 			return
@@ -98,8 +72,8 @@ func ObserveClientLaunch(clientType, clientId, profileId string) {
 	l.LaunchCount++
 	l.LastLaunch = time.Now().UnixMilli()
 	l.LastActive = l.LastLaunch
-	if err := platform.SaveFields(sCtx(), l); err != nil {
-		sLog().Error("save fields failure on client launch",
+	if err := platform.SaveObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client launch",
 			zap.String("clientType", clientType), zap.String("clientId", clientId),
 			zap.String("profileId", profileId), zap.Error(err))
 	}
@@ -107,28 +81,28 @@ func ObserveClientLaunch(clientType, clientId, profileId string) {
 
 func ObserveClientActive(clientId, profileId string) {
 	l := &LifecycleData{ClientId: clientId, ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), l); err != nil {
-		sLog().Error("load fields failure on client active",
+	if err := platform.LoadObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client active",
 			zap.String("profileId", profileId), zap.Error(err))
 		return
 	}
 	l.LastActive = time.Now().UnixMilli()
-	if err := platform.SaveFields(sCtx(), l); err != nil {
-		sLog().Error("save fields failure on client active",
+	if err := platform.SaveObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client active",
 			zap.String("profileId", profileId), zap.Error(err))
 	}
 }
 
 func ObserveClientShutdown(clientId, profileId string) {
 	l := &LifecycleData{ClientId: clientId, ProfileId: profileId}
-	if err := platform.LoadFields(sCtx(), l); err != nil {
-		sLog().Error("load fields failure on client shutdown",
+	if err := platform.LoadObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client shutdown",
 			zap.String("profileId", profileId), zap.Error(err))
 		return
 	}
 	l.LastShutdown = time.Now().UnixMilli()
-	if err := platform.SaveFields(sCtx(), l); err != nil {
-		sLog().Error("save fields failure on client shutdown",
+	if err := platform.SaveObject(sCtx(), l); err != nil {
+		sLog().Error("db failure on client shutdown",
 			zap.String("profileId", profileId), zap.Error(err))
 	}
 }

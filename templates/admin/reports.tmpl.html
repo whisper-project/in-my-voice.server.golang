@@ -1,0 +1,97 @@
+{{ define "admin/reports.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {{ template "admin/header.tmpl.html" }}
+    <title>InMyVoice Research Administration</title>
+</head>
+<body>
+<h1>InMyVoice - Research Administration</h1>
+<p style="color: red;">{{ .Message }}</p>
+<h2>{{ .Study }} Reports</h2>
+{{ if .Reports }}
+    <table>
+        <thead>
+        <tr>
+            <th><a href="./reports">Name</a></th>
+            <th><a href="./reports?sort=type">Type</a></th>
+            <th><a href="./reports?sort=start">From</a></th>
+            <th><a href="./reports?sort=end">Thru</a></th>
+            <th><a href="./reports?sort=restricted">Restricted?</a></th>
+            <th><a href="./reports?sort=generated">Last Run</a></th>
+            <th><a href="./reports?sort=schedule">Schedule</a></th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {{ range .Reports }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td>{{ .Type }}</td>
+                <td>{{ .Start }}</td>
+                <td>{{ .End }}</td>
+                <td>{{ .Upns }}</td>
+                <td>{{ .Generated }}</td>
+                <td>{{ .Schedule }}</td>
+                <td>
+                    <a href="./download-report/{{ .Id }}" download="{{ .Filename }}" target="_blank">Download</a>&nbsp;&nbsp;
+                    <a href="?generate={{ .Id }}">Run again</a>&nbsp;&nbsp;
+                    <a href="?delete={{ .Id }}">Delete</a>
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+{{ else }}
+    <p>No reports.</p>
+{{ end }}
+<h3>New Typed Lines Report</h3>
+<form action="./reports" method="POST">
+    <input type="hidden" name="op" value="lines" />
+    <div class="form-control width-325">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" size="35" required />
+    </div>
+    <div class="form-control width-325">
+        <label for="start">Start Date:</label>
+        <input type="date" id="start" name="start" />
+    </div>
+    <div class="form-control width-325">
+        <label for="end">End Date:</label>
+        <input type="date" id="end" name="end" size="20" />
+    </div>
+    <div class="form-control width-325">
+        <label for="upns">Restrict to UPNs:</label>
+        <select id="upns" name="upns" multiple size="10">
+            {{ range .Upns }}
+                <option value="{{ . }}">{{ . }}</option>
+            {{ end }}
+        </select>
+    </div>
+    <div class="form-control width-325">
+        <button type="submit">Generate</button>
+        <button type="button" onclick="window.location.href='./reports'">Cancel</button>
+    </div>
+</form>
+<h3>New Repeated Phrases Report</h3>
+<form action="./reports" method="POST">
+    <input type="hidden" name="op" value="phrases" />
+    <div class="form-control width-325">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" size="35" required />
+    </div>
+    <div class="form-control width-325">
+        <button type="submit">Generate</button>
+        <button type="button" onclick="window.location.href=''">Cancel</button>
+    </div>
+</form>
+{{ template "admin/footer.tmpl.html" }}
+</body>
+</html>
+{{ end }}

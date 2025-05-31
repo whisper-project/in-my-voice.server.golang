@@ -1,0 +1,100 @@
+{{ define "admin/users.tmpl.html" }}
+<!--
+  ~ Copyright 2025 Daniel C. Brotsky. All rights reserved.
+  ~ All the copyrighted work in this repository is licensed under the
+  ~ GNU Affero General Public License v3, reproduced in the LICENSE file.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {{ template "admin/header.tmpl.html" }}
+    <title>InMyVoice User Administration</title>
+</head>
+<body>
+<h1>InMyVoice - User Administration</h1>
+<p style="color: red;">{{ .Message }}</p>
+<h2>{{ .Study }} Users</h2>
+{{ if .Users }}
+<table>
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Roles</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{ range .Users }}
+        <tr>
+            <td>{{ .Email }}</td>
+            <td>{{ .Roles }}</td>
+            <td><a href="?edit={{ .Id }}">Edit</a>, <a href="?delete={{ .Id }}">Delete</a></td>
+        </tr>
+    {{ end }}
+    </tbody>
+</table>
+{{ else }}
+<p>No users.</p>
+{{ end }}
+{{ if .Edit }}
+    <h3>Edit User</h3>
+    <form action="./users" method="POST">
+        <input type="hidden" name="id" value="{{ .Edit.Id }}" />
+        <div class="form-control width-500">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" size="50" value="{{ .Edit.Email }}" required />
+        </div>
+        <fieldset class="width-500">
+            <legend>Roles:</legend>
+            <div class="form-control no-spread">
+                <input type="checkbox" id="researcher" name="researcher" {{ if .Edit.researcher }}checked{{ end }} />
+                <label for="researcher">Researcher</label>
+            </div>
+            <div class="form-control no-spread">
+                <input type="checkbox" id="participant" name="participant" {{ if .Edit.participant }}checked{{ end }} />
+                <label for="participant">Participant Manager</label>
+            </div>
+            <div class="form-control no-spread">
+                <input type="checkbox" id="user" name="user" {{ if .Edit.user }}checked{{ end }} />
+                <label for="user">User Manager</label>
+            </div>
+        </fieldset>
+        <div class="form-control width-500">
+            <button type="submit">Save Changes</button>
+            <button type="button" onclick="window.location.href='./users'">Cancel</button>
+        </div>
+    </form>
+{{ else }}
+    <h3>Add User</h3>
+    <form action="./users" method="POST">
+        <input type="hidden" name="id" value="" />
+        <div class="form-control width-500">
+            <label for="email">Email:</label>
+            <input type="text" id="email" name="email" size="50" value="" required />
+        </div>
+        <fieldset class="width-500">
+            <legend>Roles (at least one must be checked):</legend>
+            <div class="form-control no-spread">
+                <input type="checkbox" id="researcher" name="researcher" />
+                <label for="researcher">Researcher</label>
+            </div>
+            <div class="form-control no-spread">
+                <input type="checkbox" id="participant" name="participant" />
+                <label for="participant">Participant Manager</label>
+            </div>
+            <div class="form-control no-spread">
+                <input type="checkbox" id="user" name="user" />
+                <label for="user">User Manager</label>
+            </div>
+        </fieldset>
+        <div class="form-control width-500">
+            <button type="submit">Save Changes</button>
+            <button type="button" onclick="window.location.href='./users'">Cancel</button>
+        </div>
+    </form>
+{{ end }}
+{{ template "admin/footer.tmpl.html" }}
+</body>
+</html>
+{{ end }}

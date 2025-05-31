@@ -9,35 +9,69 @@ package platform
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dotenv-org/godotenvvault"
 )
 
 type Environment struct {
-	Name           string
-	ApnsUrl        string
-	ApnsCredSecret string
-	ApnsCredId     string
-	ApnsTeamId     string
-	DbUrl          string
-	DbKeyPrefix    string
+	AgePublicKey    string
+	AgeSecretKey    string
+	AwsAccessKey    string
+	AwsBucket       string
+	AwsReportFolder string
+	AwsRegion       string
+	AwsSecretKey    string
+	DbKeyPrefix     string
+	DbUrl           string
+	HttpHost        string
+	HttpPort        int
+	HttpScheme      string
+	Name            string
+	SmtpCredId      string
+	SmtpCredSecret  string
+	SmtpHost        string
+	SmtpPort        int
 }
 
 //goland:noinspection SpellCheckingInspection
 var (
 	ciConfig = Environment{
 		Name:           "CI",
-		ApnsUrl:        "http://localhost:2197",
-		ApnsCredSecret: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgGSZi+0fnzC8bbBbI\nD5wyNIgqnl7dFLN+FlUD/mOAG+ShRANCAASZU2wXczRjmlkcHJp4yHTl3KlAXoB8\nozM8I6bJBZPUGlTdIpvV2u2mLhKBZNZIUDaqdHKkfukSn+hgdZspMtaA\n-----END PRIVATE KEY-----",
-		ApnsCredId:     "89AB98CD89",
-		ApnsTeamId:     "8CD8989AB9",
+		AgePublicKey:   "age1kq7jnct8jv0d2hr7u3vpf6804emfqwptz6svy9mc9nv7pnkzqc5qsm4wrz",
+		AgeSecretKey:   "AGE-SECRET-KEY-1H30T40KMX70VYEHM2ATF9N02U6KRL46660EFPU8GT76DAJNZN6EQRU7CGA",
+		HttpScheme:     "http",
+		HttpHost:       "localhost",
+		SmtpHost:       "localhost",
+		HttpPort:       8080,
+		SmtpPort:       2500,
+		SmtpCredSecret: "",
+		SmtpCredId:     "",
 		DbUrl:          "redis://",
 		DbKeyPrefix:    "c:",
 	}
-	loadedConfig = ciConfig
-	configStack  []Environment
+	loadedConfig        = ciConfig
+	configStack         []Environment
+	configChangeActions = make(map[string]func())
 )
+
+func RegisterForConfigChange(name string, action func()) {
+	if _, ok := configChangeActions[name]; ok {
+		panic(`Duplicate action registration for "` + name + `"`)
+	}
+	configChangeActions[name] = action
+}
+
+func UnregisterForConfigChange(name string) {
+	delete(configChangeActions, name)
+}
+
+func runConfigChangeActions() {
+	for _, action := range configChangeActions {
+		action()
+	}
+}
 
 func GetConfig() Environment {
 	return loadedConfig
@@ -68,11 +102,13 @@ func PushConfig(name string) error {
 func PushAlteredConfig(env Environment) {
 	configStack = append(configStack, loadedConfig)
 	loadedConfig = env
+	runConfigChangeActions()
 }
 
 func pushCiConfig() error {
 	configStack = append(configStack, loadedConfig)
 	loadedConfig = ciConfig
+	runConfigChangeActions()
 	return nil
 }
 
@@ -103,15 +139,34 @@ func pushEnvConfig(filename string) error {
 		return fmt.Errorf("error loading .env vars: %v", err)
 	}
 	configStack = append(configStack, loadedConfig)
-	loadedConfig = Environment{
-		Name:           os.Getenv("ENVIRONMENT_NAME"),
-		ApnsUrl:        os.Getenv("APNS_SERVER"),
-		ApnsCredSecret: os.Getenv("APNS_CRED_SECRET_PKCS8"),
-		ApnsCredId:     os.Getenv("APNS_CRED_ID"),
-		ApnsTeamId:     os.Getenv("APNS_TEAM_ID"),
-		DbUrl:          os.Getenv("REDIS_URL"),
-		DbKeyPrefix:    os.Getenv("DB_KEY_PREFIX"),
+	getEnvPort := func(s string, d int) int {
+		val, _ := strconv.Atoi(s)
+		if val <= 0 {
+			return d
+		} else {
+			return val
+		}
 	}
+	loadedConfig = Environment{
+		AgePublicKey:    os.Getenv("AGE_PUBLIC_KEY"),
+		AgeSecretKey:    os.Getenv("AGE_SECRET_KEY"),
+		AwsAccessKey:    os.Getenv("AWS_ACCESS_KEY"),
+		AwsBucket:       os.Getenv("AWS_BUCKET"),
+		AwsReportFolder: os.Getenv("AWS_REPORT_FOLDER"),
+		AwsRegion:       os.Getenv("AWS_REGION"),
+		AwsSecretKey:    os.Getenv("AWS_SECRET_KEY"),
+		DbKeyPrefix:     os.Getenv("DB_KEY_PREFIX"),
+		DbUrl:           os.Getenv("REDIS_URL"),
+		HttpHost:        os.Getenv("HTTP_HOST"),
+		HttpPort:        getEnvPort(os.Getenv("HTTP_PORT"), 8080),
+		HttpScheme:      os.Getenv("HTTP_SCHEME"),
+		Name:            os.Getenv("ENVIRONMENT_NAME"),
+		SmtpCredId:      os.Getenv("SMTP_CRED_ID"),
+		SmtpCredSecret:  os.Getenv("SMTP_CRED_SECRET"),
+		SmtpHost:        os.Getenv("SMTP_HOST"),
+		SmtpPort:        getEnvPort(os.Getenv("SMTP_PORT"), 2025),
+	}
+	runConfigChangeActions()
 	return nil
 }
 
@@ -121,6 +176,7 @@ func PopConfig() {
 	}
 	loadedConfig = configStack[len(configStack)-1]
 	configStack = configStack[:len(configStack)-1]
+	runConfigChangeActions()
 	return
 }
 
@@ -139,5 +195,5 @@ func FindEnvFile(name string, fallback bool) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("no file %q found in path", name)
+	return "", fmt.Errorf("no file %q found in parent", name)
 }
