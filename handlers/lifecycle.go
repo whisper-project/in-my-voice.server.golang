@@ -7,19 +7,21 @@
 package handlers
 
 import (
+	"net/http"
+
+	"go.uber.org/zap"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/whisper-project/in-my-voice.server.golang/middleware"
 	"github.com/whisper-project/in-my-voice.server.golang/storage"
-	"go.uber.org/zap"
-	"net/http"
 )
 
 func AnomalyHandler(c *gin.Context) {
 	clientId := c.GetHeader("X-Client-Id")
 	profileId := c.GetHeader("X-Profile-Id")
 	clientType := c.GetHeader("X-Client-Type")
-	message := c.Param("message")
+	message := c.PostForm("message")
 	middleware.CtxLog(c).Info("Anomaly reported",
 		zap.String("clientId", clientId), zap.String("clientType", clientType),
 		zap.String("profileId", profileId), zap.String("message", message))
