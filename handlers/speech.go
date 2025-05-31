@@ -33,7 +33,8 @@ func ElevenSpeechSettingsGetHandler(c *gin.Context) {
 	if s != nil {
 		middleware.CtxLog(c).Info("successful speech settings retrieval",
 			zap.String("clientId", clientId), zap.String("profileId", profileId))
-		c.JSON(http.StatusOK, json.RawMessage(s.Settings))
+		settings := services.ElevenLabsGenerateSettings(s.ApiKey, s.VoiceId, s.VoiceName, s.ModelId)
+		c.JSON(http.StatusOK, json.RawMessage(settings))
 		return
 	}
 	middleware.CtxLog(c).Info("no speech settings to retrieve",
@@ -52,7 +53,7 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "failed to read the request body"})
 		return
 	}
-	apiKey, voiceId, voiceName, ok := services.ElevenParseSettings(string(body))
+	apiKey, voiceId, _, model, ok := services.ElevenParseSettings(string(body))
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "invalid settings"})
 		return
@@ -105,13 +106,8 @@ func ElevenSpeechSettingsPostHandler(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "invalid voice ID"})
 		return
 	}
-	if name != voiceName {
-		middleware.CtxLog(c).Info("the uploaded voice name does not match voice ID, fixing it",
-			zap.String("actual name", voiceId), zap.String("uploaded name", voiceName),
-		)
-	}
-	// validation complete: update the voice settings
-	changed, err := storage.UpdateSpeechSettings(profileId, apiKey, voiceId, name)
+	// validation succeeded: update the voice settings
+	changed, err := storage.UpdateSpeechSettings(profileId, apiKey, voiceId, name, model)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
@@ -173,7 +169,6 @@ func ParticipantElevenSpeechSettingsHandler(c *gin.Context) {
 	if !ok {
 		return
 	}
-	update := c.Query("update")
 	studyId, upn, err := storage.GetProfileStudyMembership(profileId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
@@ -201,29 +196,34 @@ func ParticipantElevenSpeechSettingsHandler(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 		return
 	}
-	settings := services.ElevenLabsGenerateSettings(p.ApiKey, p.VoiceId, p.VoiceName)
-	// now get the current profile speech settings and compare them
-	profileSettings, err := storage.GetSpeechSettings(profileId)
+	if c.Query("update") != "true" {
+		// compare the settings
+		isMatch, err := storage.MatchesCurrentSpeechSettings(profileId, p.ApiKey, p.VoiceId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
+			return
+		}
+		if isMatch {
+			c.Status(http.StatusNoContent)
+		} else {
+			c.JSON(http.StatusOK, gin.H{"update": "false"})
+		}
+		return
+	}
+	// update the settings if they have changed
+	updated, err := storage.UpdateSpeechSettings(profileId, p.ApiKey, p.VoiceId, p.VoiceName, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 		return
 	}
-	if profileSettings != nil && profileSettings.Settings == settings {
+	if !updated {
 		c.Status(http.StatusNoContent)
 		return
 	}
-	// the participant settings and the user settings are different
-	if update == "true" {
-		// replace the user settings with the participant settings
-		if _, err := storage.UpdateSpeechSettings(profileId, p.ApiKey, p.VoiceId, p.VoiceName); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
-			return
-		}
-		if err := storage.ProfileClientSpeechDidUpdate(p.ProfileId, clientId); err != nil {
-			middleware.CtxLog(c).Info("ignoring update notifications error",
-				zap.String("profileId", p.ProfileId), zap.Error(err))
-		}
-		c.Header("X-Speech-Settings-Update", "true")
+	if err := storage.ProfileClientSpeechDidUpdate(p.ProfileId, clientId); err != nil {
+		middleware.CtxLog(c).Info("ignoring update notifications error",
+			zap.String("profileId", p.ProfileId), zap.Error(err))
 	}
-	c.JSON(http.StatusOK, gin.H{"update": update})
+	c.Header("X-Speech-Settings-Update", "true")
+	c.JSON(http.StatusOK, gin.H{"update": "true"})
 }

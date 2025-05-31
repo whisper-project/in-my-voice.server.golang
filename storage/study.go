@@ -106,7 +106,7 @@ func GetAllStudies() ([]*Study, error) {
 
 // DeleteStudy will delete everything, including all stats! Be careful!
 func DeleteStudy(studyId string) error {
-	// first make sure there are no active participants
+	// first, make sure there are no active participants
 	participants, err := GetAllStudyParticipants(studyId)
 	if err != nil {
 		return err
@@ -116,13 +116,13 @@ func DeleteStudy(studyId string) error {
 			return ParticipantInUseError
 		}
 	}
-	// next delete all the phrase stats for the participants
+	// next, delete all the phrase stats for the participants
 	if err = platform.DeleteStorage(sCtx(), PhraseStatsIndex(studyId)); err != nil {
 		sLog().Error("db failure on phrase stats delete",
 			zap.String("studyId", studyId), zap.Error(err))
 		return err
 	}
-	// next delete all the line stats for the participants
+	// next, delete all the line stats for the participants
 	for _, p := range participants {
 		if err = platform.DeleteStorage(sCtx(), StudyTypedLineStatsIndex(studyId+"+"+p.Upn)); err != nil {
 			sLog().Error("db failure on typed line stats delete",

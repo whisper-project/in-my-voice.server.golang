@@ -8,19 +8,19 @@ package storage
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/gob"
 	"errors"
-	"fmt"
+
 	"github.com/whisper-project/in-my-voice.server.golang/platform"
-	"github.com/whisper-project/in-my-voice.server.golang/services"
 	"go.uber.org/zap"
 )
 
 type SpeechSettings struct {
 	ProfileId string
-	Settings  string
-	ETag      string
+	ApiKey    string
+	VoiceId   string
+	VoiceName string
+	ModelId   string
 }
 
 func (s *SpeechSettings) StoragePrefix() string {
@@ -44,15 +44,6 @@ func (s *SpeechSettings) FromRedis(b []byte) error {
 	return gob.NewDecoder(bytes.NewReader(b)).Decode(s)
 }
 
-func NewSpeechSettings(profileId, settings string) *SpeechSettings {
-	s := &SpeechSettings{
-		ProfileId: profileId,
-		Settings:  settings,
-	}
-	s.ETag = fmt.Sprintf("%x", md5.Sum([]byte(s.Settings)))
-	return s
-}
-
 func GetSpeechSettings(profileId string) (*SpeechSettings, error) {
 	s := &SpeechSettings{ProfileId: profileId}
 	if err := platform.LoadObject(sCtx(), s); err != nil {
@@ -66,21 +57,39 @@ func GetSpeechSettings(profileId string) (*SpeechSettings, error) {
 	return s, nil
 }
 
-func UpdateSpeechSettings(profileId, apiKey, voiceId, voiceName string) (bool, error) {
-	settings := services.ElevenLabsGenerateSettings(apiKey, voiceId, voiceName)
-	n := NewSpeechSettings(profileId, settings)
-	o := &SpeechSettings{ProfileId: profileId}
-	if err := platform.LoadObject(sCtx(), o); err != nil {
-		if !errors.Is(err, platform.NotFoundError) {
-			sLog().Error("db failure on speech settings update",
-				zap.String("profileId", profileId), zap.Error(err))
-			return false, err
-		}
+func MatchesCurrentSpeechSettings(profileId, apiKey, voiceId string) (bool, error) {
+	o, err := GetSpeechSettings(profileId)
+	if err != nil {
+		sLog().Error("db failure on speech settings compare",
+			zap.String("profileId", profileId), zap.Error(err))
+		return false, err
 	}
-	if o.ETag == n.ETag {
+	if o == nil {
 		return false, nil
 	}
-	if err := platform.SaveObject(sCtx(), n); err != nil {
+	return apiKey == o.ApiKey && voiceId == o.VoiceId, nil
+}
+
+func UpdateSpeechSettings(profileId, apiKey, voiceId, voiceName, modelId string) (bool, error) {
+	o, err := GetSpeechSettings(profileId)
+	if err != nil {
+		sLog().Error("db failure on speech settings update",
+			zap.String("profileId", profileId), zap.Error(err))
+		return false, err
+	}
+	if o != nil {
+		if modelId == "" {
+			modelId = o.ModelId
+		}
+		// ignore voice name when comparing, because it's determined by voiceId
+		if apiKey == o.ApiKey && voiceId == o.VoiceId && modelId == o.ModelId {
+			return false, nil
+		}
+		o.ApiKey, o.VoiceId, o.VoiceName, o.ModelId = apiKey, voiceId, voiceName, modelId
+	} else {
+		o = &SpeechSettings{ProfileId: profileId, ApiKey: apiKey, VoiceId: voiceId, VoiceName: voiceName, ModelId: modelId}
+	}
+	if err := platform.SaveObject(sCtx(), o); err != nil {
 		sLog().Error("db failure on settings update",
 			zap.String("profileId", profileId), zap.Error(err))
 		return false, err

@@ -86,7 +86,7 @@ func JoinStudyHandler(c *gin.Context) {
 	c.Header("X-Study-Membership-Update", study.Name)
 	// if there are speech settings in the participant, apply them to the profile
 	if p != nil && p.ApiKey != "" {
-		updatedUser, err := storage.UpdateSpeechSettings(profileId, p.ApiKey, p.VoiceId, p.VoiceName)
+		updatedUser, err := storage.UpdateSpeechSettings(profileId, p.ApiKey, p.VoiceId, p.VoiceName, "")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 			return

@@ -14,21 +14,32 @@ import (
 	"net/http"
 )
 
-func ElevenParseSettings(settings string) (apiKey, voiceId, voiceName string, ok bool) {
+func ElevenParseSettings(settings string) (apiKey, voiceId, voiceName, modelId string, ok bool) {
 	var s map[string]any
 	if err := json.Unmarshal([]byte(settings), &s); err != nil {
-		return "", "", "", false
+		return
 	}
-	var aOk, vOk, nOk bool
-	apiKey, aOk = s["apiKey"].(string)
-	voiceId, vOk = s["voiceId"].(string)
-	voiceName, nOk = s["voiceName"].(string)
-	ok = aOk && vOk && nOk
-	return
+	key, k := s["apiKey"].(string)
+	if !k {
+		return
+	}
+	voice, k := s["voiceId"].(string)
+	if !k {
+		return
+	}
+	name, k := s["voiceName"].(string)
+	if !k {
+		name = ""
+	}
+	model, k := s["modelId"].(string)
+	if !k {
+		return
+	}
+	return key, voice, name, model, true
 }
 
-func ElevenLabsGenerateSettings(apiKey, voiceId, voiceName string) string {
-	s := map[string]string{"apiKey": apiKey, "voiceId": voiceId, "voiceName": voiceName}
+func ElevenLabsGenerateSettings(apiKey, voiceId, voiceName, modelId string) string {
+	s := map[string]string{"apiKey": apiKey, "voiceId": voiceId, "voiceName": voiceName, "modelId": modelId}
 	b, _ := json.Marshal(s)
 	return string(b)
 }

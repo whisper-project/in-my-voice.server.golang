@@ -492,7 +492,7 @@ func PostParticipantsHandler(c *gin.Context) {
 		}
 		if allowChanges && p.Started > 0 {
 			// update the user to their new settings
-			didUpdate, err := storage.UpdateSpeechSettings(p.ProfileId, apiKey, voiceId, voiceName)
+			didUpdate, err := storage.UpdateSpeechSettings(p.ProfileId, apiKey, voiceId, voiceName, "")
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "database failure"})
 				return
